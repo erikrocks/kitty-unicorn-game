@@ -56,10 +56,20 @@ while dodging spiky shells. Endless.
 - Add short comments explaining the "why," not just the "what."
 
 ## Hosting
-The game is published with GitHub Pages from the `erikrocks/kitty-unicorn-game` repo.
-Note: `eriksheridan.com` is served by a *project* repo (`erikrocks/eriksheridan.com`), not a
-user site — so other repos can NOT appear at `eriksheridan.com/<path>`. See the hosting notes
-in the repo/session for the two ways to get it onto the domain.
+Published with GitHub Pages from `erikrocks/kitty-unicorn-game`, live at
+<https://erikrocks.github.io/kitty-unicorn-game/>. Pushing to `main` redeploys it.
+
+**Target URL: `kudr.eriksheridan.com`.** Why not `eriksheridan.com/kudr`: the apex domain is
+served by a *project* repo (`erikrocks/eriksheridan.com`) rather than a user site — there is
+no `erikrocks.github.io` repo. When a custom domain sits on a project repo it serves ONLY
+that repo, so a path pointing at a different repo always 404s. A subdomain is the fix, and it
+keeps the game in its own repo where `main` → push → live already works.
+
+Setup order matters: **add the DNS record first.** Setting the custom domain in GitHub before
+DNS resolves makes the working `erikrocks.github.io` URL redirect to a dead hostname.
+1. DNS: `CNAME` record, host `kudr`, target `erikrocks.github.io.`
+2. Then repo Settings → Pages → custom domain `kudr.eriksheridan.com`, and tick Enforce HTTPS
+   once the certificate issues (~15 min).
 
 ## Roadmap (later — one at a time, don't build ahead)
 1. ~~Gem types worth different amounts~~ — done (gem 10 / donut 50 / heart +1 life).
