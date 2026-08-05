@@ -35,11 +35,26 @@ while dodging spiky shells. Endless.
 - **Splash system**: 30 particles at each surface crossing.
 - **Web Audio from scratch** — collect, donut, heart, hit and splash sounds, all synthesized
   in code (no audio files). Unlocked on first tap.
-- **Collectibles**: gems (10 pts), donuts (50 pts), hearts (+1 life). They bob and drift in.
-- **Obstacles**: animated spiky shells underwater; hitting one costs a life.
-- **Lives (3 to start) and a GAME OVER screen** with the final score and a restart prompt.
+- **Collectibles**: gems (10 pts) spawn anywhere; donuts (50 pts) and hearts (+1 life) are
+  **air-only**, so the valuable stuff costs you a leap. They bob and drift in.
+- **Obstacles**: animated spiky shells underwater; hitting one costs a life. They shimmer
+  **red** for the last 600px (~1.7s) as a warning.
+- **Lives (3 to start) and a GAME OVER screen** with the final score and a **Try Again
+  button** you have to actually hit — tapping anywhere used to wipe the score before you'd
+  read it. Enter still works.
 - **Start screen** with the title, Vivian's credit, and a blinking prompt.
 - Clouds, a scrolling sandy seafloor, and a responsive HUD that scales to the screen.
+- **The dolphin's x position is responsive** (`playerHomeX()`): a quarter of the screen
+  width, capped at 200px, floored at 90px. On a phone a fixed 200px was over half the screen
+  and you couldn't see what was coming.
+
+## Design rules learned from playtesting (don't undo these)
+- **Hazards must not look shiny.** A gold/white sparkle on the shells read as *treasure* and
+  made players swim toward them. Danger is red; rewards are bright/cyan/pink.
+- **Test at 375px wide.** Every bug Vivian and Erik have hit was mobile-only and invisible on
+  a desktop viewport — the dolphin sitting too far right, the game-over misfire, and a wedge
+  of missing water caused by a loop that stepped in 20px jumps (1280 divides by 20; 375
+  doesn't). Check a phone width before calling any visual change done.
 
 ## Code style
 - Code is organized into labeled sections: SETUP, INPUT, UPDATE, DRAW, MAIN LOOP.
@@ -55,21 +70,25 @@ while dodging spiky shells. Endless.
 - Prefer simple, readable code a beginner can follow over clever optimizations.
 - Add short comments explaining the "why," not just the "what."
 
-## Hosting
-Published with GitHub Pages from `erikrocks/kitty-unicorn-game`, live at
-<https://erikrocks.github.io/kitty-unicorn-game/>. Pushing to `main` redeploys it.
+## Hosting — DONE, live
+**<https://kudr.eriksheridan.com>** — GitHub Pages from `erikrocks/kitty-unicorn-game`,
+custom domain set, HTTPS enforced, DNS `CNAME kudr → erikrocks.github.io` in place.
+**Push to `main` and it redeploys.** Nothing else to configure.
 
-**Target URL: `kudr.eriksheridan.com`.** Why not `eriksheridan.com/kudr`: the apex domain is
-served by a *project* repo (`erikrocks/eriksheridan.com`) rather than a user site — there is
-no `erikrocks.github.io` repo. When a custom domain sits on a project repo it serves ONLY
-that repo, so a path pointing at a different repo always 404s. A subdomain is the fix, and it
-keeps the game in its own repo where `main` → push → live already works.
+Why a subdomain and not `eriksheridan.com/kudr`: the apex is served by a *project* repo
+(`erikrocks/eriksheridan.com`) — there is no `erikrocks.github.io` user-site repo. A custom
+domain on a project repo serves ONLY that repo, so a path pointing at a different repo always
+404s. Don't retry the path approach; it cannot work without restructuring the whole site.
 
-Setup order matters: **add the DNS record first.** Setting the custom domain in GitHub before
-DNS resolves makes the working `erikrocks.github.io` URL redirect to a dead hostname.
-1. DNS: `CNAME` record, host `kudr`, target `erikrocks.github.io.`
-2. Then repo Settings → Pages → custom domain `kudr.eriksheridan.com`, and tick Enforce HTTPS
-   once the certificate issues (~15 min).
+**Verifying a deploy:** the Pages builds API (`/pages/builds/latest`) reports a *stale commit
+sha* — polling it will look like the deploy hung when it already shipped. Check the actual
+bytes instead:
+```
+curl -sS -o /tmp/live.html "https://kudr.eriksheridan.com/?cb=$RANDOM"; diff /tmp/live.html index.html
+```
+
+Separately: `erikrocks/eriksheridan.com` still has **Enforce HTTPS off** — unrelated to this
+game, but worth flipping.
 
 ## Roadmap (later — one at a time, don't build ahead)
 1. ~~Gem types worth different amounts~~ — done (gem 10 / donut 50 / heart +1 life).
