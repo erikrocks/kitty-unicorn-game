@@ -26,7 +26,13 @@
   // (Tweak these numbers to change how the game feels.)
 
   // Dolphin movement
-  const PLAYER_X    = 200;   // dolphin holds this x position; only y changes
+  // How far in from the left edge the dolphin sits. On a wide screen it's a
+  // fixed 200px, but on a narrow phone that was over HALF the screen — you
+  // couldn't see gems or shells arriving in time to react. So on small
+  // screens it slides left to a quarter of the width instead.
+  const PLAYER_X_MAX  = 200;
+  const PLAYER_X_FRAC = 0.25;
+  const PLAYER_X_MIN  = 90;  // any less and the dolphin's tail hangs off-screen
   const RISE_ACCEL  = 7920;  // how hard you're pushed UP while holding, in water
   const SINK_ACCEL  = 3600;  // how hard you sink when you let go, in water
   const AIR_GRAVITY = 1620;  // gravity while airborne (you can't steer mid-leap)
@@ -43,6 +49,11 @@
   // World
   const SCROLL_SPEED   = 300; // px/sec that gems and the seafloor slide left
   const OBSTACLE_SPEED = 360; // shells come at you slightly faster
+
+  // Shells shimmer once they're this close, giving a warning before they
+  // arrive. At 360 px/sec that's about 1.7 seconds to react — enough time
+  // for a young player to steer out of the way.
+  const SHELL_WARN_DISTANCE = 600;
   const FLOOR_HEIGHT   = 60;  // height of the sandy seafloor
 
   // Spawning (chances PER SECOND)
@@ -97,6 +108,12 @@
     return viewH / 2 + 20;
   }
 
+  // The dolphin's home x position, worked out from the current screen width.
+  // It's a function rather than a constant so rotating a phone recalculates it.
+  function playerHomeX() {
+    return Math.max(PLAYER_X_MIN, Math.min(PLAYER_X_MAX, viewW * PLAYER_X_FRAC));
+  }
+
   // Where the "Try Again" button sits on the GAME OVER screen. Both the
   // drawing code and the click test call this, so they can never disagree
   // about where the button actually is.
@@ -123,7 +140,7 @@
   let gameState = 'START';
   let elapsed = 0; // seconds since load — drives all the wobble animations
 
-  const player = { x: PLAYER_X, y: viewH / 2, dy: 0 };
+  const player = { x: playerHomeX(), y: viewH / 2, dy: 0 };
   const items = [];
   const obstacles = [];
   const splashes = [];
@@ -141,6 +158,7 @@
   // Handle window resizing (like rotating a phone) dynamically
   window.addEventListener('resize', () => {
     resizeCanvas();
+    player.x = playerHomeX(); // re-centre for the new width (e.g. phone rotated)
     if (player.y > viewH - 80) player.y = viewH - 80;
   });
 
@@ -249,7 +267,7 @@
     items.length = 0;
     obstacles.length = 0;
     splashes.length = 0;
-    player.x = PLAYER_X;
+    player.x = playerHomeX();
     player.y = viewH / 2;
     player.dy = 0;
     gameState = 'PLAYING';
@@ -479,8 +497,34 @@
     ctx.restore();
   }
 
-  function drawSpikyShell(x, y) {
+  // `warn` runs 0 → 1 as the shell closes in, fading a shimmer up around it
+  // so you get a heads-up instead of a nasty surprise.
+  function drawSpikyShell(x, y, warn) {
     ctx.save(); ctx.translate(x, y); ctx.rotate(Math.sin(elapsed * 3) * 0.2);
+
+    if (warn > 0) {
+      // RED on purpose. A gold or white sparkle reads as treasure — it made
+      // players swim toward the shells instead of away from them.
+      const pulse = 0.55 + Math.abs(Math.sin(elapsed * 9)) * 0.45;
+      const radius = 34 + warn * 12;
+      const halo = ctx.createRadialGradient(0, 0, radius * 0.3, 0, 0, radius);
+      halo.addColorStop(0, `rgba(255, 40, 40, ${warn * pulse * 0.85})`);
+      halo.addColorStop(1, 'rgba(190, 0, 0, 0)');
+      ctx.fillStyle = halo;
+      ctx.beginPath(); ctx.arc(0, 0, radius, 0, Math.PI * 2); ctx.fill();
+
+      // Warning sparks orbiting out of phase, so it flickers like a hazard
+      // light rather than glowing steadily.
+      for (let s = 0; s < 3; s++) {
+        const angle = (s / 3) * Math.PI * 2 + elapsed * 1.5;
+        const twinkle = Math.abs(Math.sin(elapsed * 7 + s * 2));
+        ctx.fillStyle = `rgba(255, 80, 60, ${warn * twinkle * 0.95})`;
+        ctx.beginPath();
+        ctx.arc(Math.cos(angle) * 32, Math.sin(angle) * 27, 1.5 + twinkle * 2.5, 0, Math.PI * 2);
+        ctx.fill();
+      }
+    }
+
     ctx.fillStyle = '#8B0000'; ctx.beginPath();
     ctx.moveTo(-5, -5); ctx.lineTo(-10, -20); ctx.lineTo(0, -10);
     ctx.moveTo(5, -5); ctx.lineTo(5, -25); ctx.lineTo(15, -8);
@@ -622,7 +666,16 @@
         else drawGem(Math.round(item.x), Math.round(item.y));
       });
 
-      obstacles.forEach(obs => drawSpikyShell(Math.round(obs.x), Math.round(obs.y)));
+      obstacles.forEach(obs => {
+        // Shimmer fades in as the shell closes the gap to the dolphin, then
+        // fades out quickly once it's safely behind — otherwise the glow
+        // would pop off the instant the shell slipped past.
+        const gap = obs.x - player.x;
+        const warn = gap >= 0
+          ? Math.max(0, 1 - gap / SHELL_WARN_DISTANCE)
+          : Math.max(0, 1 + gap / 120);
+        drawSpikyShell(Math.round(obs.x), Math.round(obs.y), warn);
+      });
     }
 
     // --- UI RENDERING (RESPONSIVE) ---
