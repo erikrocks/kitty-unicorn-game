@@ -48,7 +48,11 @@
   // Spawning (chances PER SECOND)
   const ITEM_SPAWN_RATE     = 1.2;
   const OBSTACLE_SPAWN_RATE = 0.36;
-  const ITEM_MIN_Y          = 40; // gems spawn from here down to the seafloor
+  const ITEM_MIN_Y          = 40; // highest anything spawns
+  // Donuts and hearts are the valuable ones, so they only appear in the SKY —
+  // you have to leap out of the water to earn them. Gems (the cheap ones) can
+  // show up anywhere, so diving is still worth something.
+  const AIR_ITEM_MARGIN     = 45; // keeps sky items clear of the wavy surface
 
   // Splash particles
   const SPLASH_GRAVITY = 1800;
@@ -281,9 +285,15 @@
       if (rand < 0.05) type = 'heart';
       else if (rand < 0.25) type = 'donut';
 
-      // Gems spawn anywhere from the sky down to just above the seafloor,
-      // so diving deep is worth doing (they used to all be up in the air).
-      let lowestY = viewH - FLOOR_HEIGHT - 40;
+      // Donuts and hearts are air-only, so the good stuff costs you a leap.
+      // Gems can be anywhere, which keeps diving worth a little something.
+      let lowestY;
+      if (type === 'gem') {
+        lowestY = viewH - FLOOR_HEIGHT - 40; // down to just above the seafloor
+      } else {
+        lowestY = waterLineY() - AIR_ITEM_MARGIN; // stay up in the sky
+      }
+
       items.push({
         x: viewW + 50,
         baseY: ITEM_MIN_Y + Math.random() * (lowestY - ITEM_MIN_Y),
