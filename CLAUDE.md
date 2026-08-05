@@ -92,11 +92,14 @@ game, but worth flipping.
 
 ## Roadmap (later — one at a time, don't build ahead)
 1. ~~Gem types worth different amounts~~ — done (gem 10 / donut 50 / heart +1 life).
-2. Underwater section the dolphin enters when it dives deep. (`// TODO:` hook in `update()`.)
-3. Customization shop: spend points on kitty outfits/colors and dolphin colors.
+2. Customization shop: spend points on kitty outfits/colors and dolphin colors.
    (`// TODO:` hooks in `drawHero()` and `draw()`.)
-4. Dolphin upgrades: colors or a horn that affect speed or jump height.
-5. Save progress (points + unlocks) to `localStorage`.
+3. Dolphin upgrades: colors or a horn that affect speed or jump height.
+4. Save progress (points + unlocks) to `localStorage`.
+
+Dropped: an "underwater section" the dolphin dived into. It was one unexplained line in the
+original roadmap, Vivian never asked for it, and the ocean is only ~300px deep so there was
+nowhere to dive to. Don't reintroduce it without her asking.
 
 ## How I like to work
 - I'm learning, so after a change, tell me how to run/test it and what to look for.
