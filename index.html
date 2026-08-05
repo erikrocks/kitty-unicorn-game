@@ -97,6 +97,25 @@
     return viewH / 2 + 20;
   }
 
+  // Where the "Try Again" button sits on the GAME OVER screen. Both the
+  // drawing code and the click test call this, so they can never disagree
+  // about where the button actually is.
+  function gameOverButtonRect() {
+    const scoreFont = Math.min(40, viewW * 0.07);
+    const w = Math.max(200, Math.min(340, viewW * 0.5));
+    const h = Math.max(56, Math.min(84, viewH * 0.09));
+    return {
+      x: viewW / 2 - w / 2,
+      y: viewH / 2 + scoreFont * 1.2 + 48,
+      w: w,
+      h: h
+    };
+  }
+
+  function pointInRect(px, py, r) {
+    return px >= r.x && px <= r.x + r.w && py >= r.y && py <= r.y + r.h;
+  }
+
   // --- GAME STATE ------------------------------------------------------
   let isPressing = false;
   let score = 0;
@@ -236,16 +255,36 @@
     gameState = 'PLAYING';
   }
 
+  // Where the mouse/finger last was, in CSS pixels. The canvas fills the
+  // whole window, so the browser's client coordinates are already what we
+  // draw in — no conversion needed.
+  let pointerX = -1;
+  let pointerY = -1;
+
+  function readPointerPos(e) {
+    if (!e) return;
+    const t = (e.touches && e.touches[0]) || (e.changedTouches && e.changedTouches[0]);
+    if (t) { pointerX = t.clientX; pointerY = t.clientY; }
+    else if (e.clientX !== undefined) { pointerX = e.clientX; pointerY = e.clientY; }
+  }
+
   function handlePointerDown(e) {
     if (e) e.preventDefault(); // Extra safeguard for mobile touches
+    readPointerPos(e);
     initAudio();
-    if (gameState === 'START' || gameState === 'GAMEOVER') {
+
+    if (gameState === 'START') {
       handleGameStart();
+    } else if (gameState === 'GAMEOVER') {
+      // You have to actually hit the Try Again button. A stray tap anywhere
+      // else does nothing, so your score stays on screen until you're ready.
+      if (pointInRect(pointerX, pointerY, gameOverButtonRect())) handleGameStart();
     } else if (gameState === 'PLAYING') {
       isPressing = true;
     }
   }
 
+  window.addEventListener('mousemove', readPointerPos);
   window.addEventListener('mousedown', handlePointerDown);
   window.addEventListener('mouseup', () => isPressing = false);
   window.addEventListener('touchstart', handlePointerDown, { passive: false });
@@ -643,11 +682,42 @@
       ctx.fillStyle = '#FFD700';
       ctx.fillText('Final Score: ' + score, viewW / 2, viewH / 2 + scoreFont * 1.2);
 
+      // --- TRY AGAIN BUTTON ---
+      // A real target you have to aim at, so you can read your score first.
+      const btn = gameOverButtonRect();
+      const hovered = pointInRect(pointerX, pointerY, btn);
+      const radius = btn.h / 2;
+
+      // Gentle breathing glow so it's obviously the thing to press.
+      const glow = 0.5 + Math.abs(Math.sin(elapsed * 3)) * 0.5;
+      ctx.save();
+      ctx.shadowColor = `rgba(255, 215, 0, ${glow * 0.9})`;
+      ctx.shadowBlur = hovered ? 34 : 20;
+
+      ctx.beginPath();
+      ctx.roundRect(btn.x, btn.y, btn.w, btn.h, radius);
+      const btnGrad = ctx.createLinearGradient(0, btn.y, 0, btn.y + btn.h);
+      btnGrad.addColorStop(0, hovered ? '#FF9AD5' : '#FF69B4');
+      btnGrad.addColorStop(1, hovered ? '#FF69B4' : '#E0489A');
+      ctx.fillStyle = btnGrad;
+      ctx.fill();
+      ctx.restore();
+
+      ctx.beginPath();
+      ctx.roundRect(btn.x, btn.y, btn.w, btn.h, radius);
+      ctx.strokeStyle = 'white';
+      ctx.lineWidth = 4;
+      ctx.stroke();
+
       ctx.fillStyle = 'white';
-      ctx.font = `bold ${retryFont}px Arial`;
-      ctx.globalAlpha = 0.5 + Math.abs(Math.sin(elapsed * 3)) * 0.5;
-      ctx.fillText('Click or press Enter to try again!', viewW / 2, viewH / 2 + scoreFont * 1.2 + retryFont * 3);
-      ctx.globalAlpha = 1.0;
+      ctx.font = `bold ${Math.min(34, btn.h * 0.44)}px Arial`;
+      ctx.textBaseline = 'middle';
+      ctx.fillText('Try Again', viewW / 2, btn.y + btn.h / 2);
+      ctx.textBaseline = 'alphabetic';
+
+      ctx.fillStyle = 'rgba(255, 255, 255, 0.75)';
+      ctx.font = `${Math.max(12, retryFont * 0.62)}px Arial`;
+      ctx.fillText('(or press Enter)', viewW / 2, btn.y + btn.h + retryFont * 1.3);
 
       ctx.textAlign = 'left';
     }
