@@ -35,8 +35,15 @@ while dodging spiky shells. Endless.
 - **Splash system**: 30 particles at each surface crossing.
 - **Web Audio from scratch** — collect, donut, heart, hit and splash sounds, all synthesized
   in code (no audio files). Unlocked on first tap.
-- **Collectibles**: gems (10 pts) spawn anywhere; donuts (50 pts) and hearts (+1 life) are
-  **air-only**, so the valuable stuff costs you a leap. They bob and drift in.
+- **Collectibles**: gems (10 pts) spawn anywhere; donuts (50 pts), hearts (+1 life) and
+  **rainbows (116 pts)** are **air-only**, so the valuable stuff costs you a leap. They bob
+  and drift in.
+- **The rainbow** is Vivian's design: a big rainbow inside a rainbow-rimmed bubble with a
+  shine and twinkling sparkles. It's the rarest thing in the game (3% of items, rarer than a
+  heart — about three per game, but a long run can have more) and the only one with its own
+  sound, a five-note rising arpeggio. 116 because 16 is her lucky number. It gets wider spawn
+  margins (`RAINBOW_MIN_Y`, `RAINBOW_MARGIN`) than the other sky items because the bubble is
+  much bigger, so it stays fully on screen and clear of the waves.
 - **Obstacles**: animated spiky shells underwater; hitting one costs a life. They shimmer
   **red** for the last 600px (~1.7s) as a warning.
 - **Lives (3 to start) and a GAME OVER screen** with the final score and a **Try Again
