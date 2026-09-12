@@ -44,8 +44,20 @@ while dodging spiky shells. Endless.
   sound, a five-note rising arpeggio. 116 because 16 is her lucky number. It gets wider spawn
   margins (`RAINBOW_MIN_Y`, `RAINBOW_MARGIN`) than the other sky items because the bubble is
   much bigger, so it stays fully on screen and clear of the waves.
-- **Obstacles**: animated spiky shells underwater; hitting one costs a life. They shimmer
-  **red** for the last 600px (~1.7s) as a warning.
+- **Obstacles**: three kinds, all underwater, all costing a life. The **spiky shell** is the
+  usual one (~76%); a **sea urchin** and a **jellyfish** turn up now and then (~12% each,
+  about 2.6 of each per minute) — Vivian wanted them occasional, not constant. The jellyfish
+  is her colour scheme: deep pink dome, darker tentacles. All three shimmer **red** for the
+  last 600px (~1.7s), drawn by one shared `drawHazardShimmer()`.
+- **Hit boxes are per-kind** (`OBSTACLE_HITBOX`), not one square for all three. The jellyfish
+  is a narrow dome with long trailing tentacles, so a wide box would sting you through empty
+  water at its sides; its box is also shifted down (`oy`) to cover the tentacles. Don't
+  collapse these back into a single box.
+- **Seaweed**: background scenery rooted in the seafloor — bubble weed (beaded stems) and
+  leafy clumps, mixed, swaying gently. It scrolls at `SCROLL_SPEED` to stay locked to the
+  sand, and `updateSeaweed()` is called from `loop()` rather than `update()` on purpose:
+  `update()` stops on the start screen but the floor keeps sliding, and frozen weeds growing
+  out of moving sand looks broken.
 - **Lives (3 to start) and a GAME OVER screen** with the final score and a **Try Again
   button** you have to actually hit — tapping anywhere used to wipe the score before you'd
   read it. Enter still works.
@@ -58,6 +70,11 @@ while dodging spiky shells. Endless.
 ## Design rules learned from playtesting (don't undo these)
 - **Hazards must not look shiny.** A gold/white sparkle on the shells read as *treasure* and
   made players swim toward them. Danger is red; rewards are bright/cyan/pink.
+- **Judge underwater art THROUGH the water layer.** The translucent water is painted over
+  everything below the surface, so it shifts colours a lot — a pale pink jellyfish reads as
+  lavender. I once flagged the jellyfish as looking too much like the pink donut; it doesn't,
+  because the jellyfish is always tinted and the donut is always in the untinted sky. Judging
+  an underwater sprite in isolation gives the wrong answer.
 - **Test at 375px wide.** Every bug Vivian and Erik have hit was mobile-only and invisible on
   a desktop viewport — the dolphin sitting too far right, the game-over misfire, and a wedge
   of missing water caused by a loop that stepped in 20px jumps (1280 divides by 20; 375
@@ -76,6 +93,14 @@ while dodging spiky shells. Endless.
   in one block at the top of the script.
 - Prefer simple, readable code a beginner can follow over clever optimizations.
 - Add short comments explaining the "why," not just the "what."
+
+## Working on this file
+- **The preview pane snapshots `index.html` as a `data:` URL.** `navigate` and
+  `location.reload()` will NOT pick up your edits — close the tab and open a fresh preview,
+  or you'll screenshot stale art and think a change didn't apply.
+- Handy when checking art: freeze the scene with `update = () => {}; spawn = () => {}`, then
+  push items/obstacles in by hand. Set each item's `y` as well as `baseY` — `update()` is
+  what normally derives `y`, so a frozen item with only `baseY` renders at `NaN`.
 
 ## Hosting — DONE, live
 **<https://kudr.eriksheridan.com>** — GitHub Pages from `erikrocks/kitty-unicorn-game`,

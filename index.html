@@ -54,6 +54,21 @@
   // arrive. At 360 px/sec that's about 1.7 seconds to react — enough time
   // for a young player to steer out of the way.
   const SHELL_WARN_DISTANCE = 600;
+
+  // Most hazards are the spiky shell. Urchins and jellyfish turn up now and
+  // then, so they stay a surprise rather than becoming the norm.
+  const URCHIN_CHANCE = 0.12;
+  const JELLY_CHANCE  = 0.12;
+
+  // Each hazard gets a hit box matching its own shape, instead of one square
+  // for all three. The jellyfish is a narrow dome with long trailing
+  // tentacles, so a wide box would let it sting you through empty water at
+  // its sides; `oy` shifts the box down to cover those tentacles.
+  const OBSTACLE_HITBOX = {
+    shell:  { hw: 45, hh: 45, oy: 0 },
+    urchin: { hw: 36, hh: 36, oy: 0 },
+    jelly:  { hw: 26, hh: 30, oy: 10 }
+  };
   const FLOOR_HEIGHT   = 60;  // height of the sandy seafloor
 
   // Spawning (chances PER SECOND)
@@ -169,6 +184,34 @@
       size: Math.random() * 25 + 30,
       speed: Math.random() * 30 + 12 // px/sec
     });
+  }
+
+  // --- SEAWEED (background scenery) ---
+  const SEAWEED_COUNT = 12;
+  const seaweed = [];
+
+  function makeSeaweed(x) {
+    return {
+      x: x,
+      kind: Math.random() < 0.5 ? 'bubble' : 'leafy',
+      height: 55 + Math.random() * 75,
+      phase: Math.random() * Math.PI * 2
+    };
+  }
+
+  for (let i = 0; i < SEAWEED_COUNT; i++) {
+    seaweed.push(makeSeaweed(Math.random() * (viewW + 300)));
+  }
+
+  // Seaweed is rooted in the sandy floor, so it has to scroll at exactly the
+  // same speed. This lives outside update() on purpose: update() stops while
+  // you're on the start screen, but the floor keeps sliding, and frozen weeds
+  // growing out of moving sand would look broken.
+  function updateSeaweed(dt) {
+    for (let i = 0; i < seaweed.length; i++) {
+      seaweed[i].x -= SCROLL_SPEED * dt;
+      if (seaweed[i].x < -70) seaweed[i] = makeSeaweed(viewW + 70 + Math.random() * 140);
+    }
   }
 
   // Handle window resizing (like rotating a phone) dynamically
@@ -404,12 +447,21 @@
     }
 
     if (Math.random() < OBSTACLE_SPAWN_RATE * dt) {
-      // Shells stay underwater, and off the seafloor so they're not buried.
+      let r = Math.random();
+      let kind = 'shell';
+      if (r < URCHIN_CHANCE) kind = 'urchin';
+      else if (r < URCHIN_CHANCE + JELLY_CHANCE) kind = 'jelly';
+
+      // Hazards stay underwater, and off the seafloor so they're not buried.
       let top = waterLineY();
       let bottom = viewH - FLOOR_HEIGHT - 30;
+      if (kind === 'urchin') top += 12;                  // spines reach higher
+      if (kind === 'jelly') { top += 22; bottom -= 40; } // tentacles hang low
+
       obstacles.push({
         x: viewW + 50,
-        y: top + Math.random() * (bottom - top)
+        y: top + Math.random() * (bottom - top),
+        kind: kind
       });
     }
   }
@@ -492,7 +544,9 @@
     // --- Spiky shells ---
     for (let i = obstacles.length - 1; i >= 0; i--) {
       obstacles[i].x -= OBSTACLE_SPEED * dt;
-      if (Math.abs(obstacles[i].x - player.x) < 45 && Math.abs(obstacles[i].y - player.y) < 45) {
+      const box = OBSTACLE_HITBOX[obstacles[i].kind] || OBSTACLE_HITBOX.shell;
+      if (Math.abs(obstacles[i].x - player.x) < box.hw &&
+          Math.abs((obstacles[i].y + box.oy) - player.y) < box.hh) {
         playHitSound();
         lives--;
         obstacles.splice(i, 1);
@@ -603,31 +657,115 @@
     ctx.restore();
   }
 
-  function drawSpikyShell(x, y, warn) {
-    ctx.save(); ctx.translate(x, y); ctx.rotate(Math.sin(elapsed * 3) * 0.2);
+  // The red "watch out" glow. All three hazards share it, so there's one
+  // place to change how the warning looks. RED on purpose: a gold or white
+  // sparkle reads as treasure and made players swim TOWARD the hazards.
+  function drawHazardShimmer(warn) {
+    if (warn <= 0) return;
+    const pulse = 0.55 + Math.abs(Math.sin(elapsed * 9)) * 0.45;
+    const radius = 34 + warn * 12;
+    const halo = ctx.createRadialGradient(0, 0, radius * 0.3, 0, 0, radius);
+    halo.addColorStop(0, `rgba(255, 40, 40, ${warn * pulse * 0.85})`);
+    halo.addColorStop(1, 'rgba(190, 0, 0, 0)');
+    ctx.fillStyle = halo;
+    ctx.beginPath(); ctx.arc(0, 0, radius, 0, Math.PI * 2); ctx.fill();
 
-    if (warn > 0) {
-      // RED on purpose. A gold or white sparkle reads as treasure — it made
-      // players swim toward the shells instead of away from them.
-      const pulse = 0.55 + Math.abs(Math.sin(elapsed * 9)) * 0.45;
-      const radius = 34 + warn * 12;
-      const halo = ctx.createRadialGradient(0, 0, radius * 0.3, 0, 0, radius);
-      halo.addColorStop(0, `rgba(255, 40, 40, ${warn * pulse * 0.85})`);
-      halo.addColorStop(1, 'rgba(190, 0, 0, 0)');
-      ctx.fillStyle = halo;
-      ctx.beginPath(); ctx.arc(0, 0, radius, 0, Math.PI * 2); ctx.fill();
-
-      // Warning sparks orbiting out of phase, so it flickers like a hazard
-      // light rather than glowing steadily.
-      for (let s = 0; s < 3; s++) {
-        const angle = (s / 3) * Math.PI * 2 + elapsed * 1.5;
-        const twinkle = Math.abs(Math.sin(elapsed * 7 + s * 2));
-        ctx.fillStyle = `rgba(255, 80, 60, ${warn * twinkle * 0.95})`;
-        ctx.beginPath();
-        ctx.arc(Math.cos(angle) * 32, Math.sin(angle) * 27, 1.5 + twinkle * 2.5, 0, Math.PI * 2);
-        ctx.fill();
-      }
+    // Warning sparks orbiting out of phase, so it flickers like a hazard
+    // light rather than glowing steadily.
+    for (let s = 0; s < 3; s++) {
+      const angle = (s / 3) * Math.PI * 2 + elapsed * 1.5;
+      const twinkle = Math.abs(Math.sin(elapsed * 7 + s * 2));
+      ctx.fillStyle = `rgba(255, 80, 60, ${warn * twinkle * 0.95})`;
+      ctx.beginPath();
+      ctx.arc(Math.cos(angle) * 32, Math.sin(angle) * 27, 1.5 + twinkle * 2.5, 0, Math.PI * 2);
+      ctx.fill();
     }
+  }
+
+  // Sea urchin: a dark ball under two rings of spines, the short set sitting
+  // between the long ones so it reads as prickly all the way round.
+  function drawSeaUrchin(x, y, warn) {
+    ctx.save(); ctx.translate(x, y);
+    drawHazardShimmer(warn);
+    ctx.rotate(Math.sin(elapsed * 2.2) * 0.15);
+
+    ctx.lineCap = 'round';
+    ctx.strokeStyle = '#7A1F44'; ctx.lineWidth = 2;
+    for (let i = 0; i < 12; i++) {
+      const a = (i / 12) * Math.PI * 2 + Math.PI / 12;
+      ctx.beginPath();
+      ctx.moveTo(Math.cos(a) * 13, Math.sin(a) * 13);
+      ctx.lineTo(Math.cos(a) * 23, Math.sin(a) * 23);
+      ctx.stroke();
+    }
+    ctx.strokeStyle = '#9E2C55'; ctx.lineWidth = 2.6;
+    for (let i = 0; i < 12; i++) {
+      const a = (i / 12) * Math.PI * 2;
+      ctx.beginPath();
+      ctx.moveTo(Math.cos(a) * 14, Math.sin(a) * 14);
+      ctx.lineTo(Math.cos(a) * 30, Math.sin(a) * 30);
+      ctx.stroke();
+    }
+
+    ctx.fillStyle = '#8B2252';
+    ctx.beginPath(); ctx.arc(0, 0, 15, 0, Math.PI * 2); ctx.fill();
+    ctx.fillStyle = 'rgba(168, 56, 102, 0.9)';
+    ctx.beginPath(); ctx.arc(-5, -5, 4.5, 0, Math.PI * 2); ctx.fill();
+    ctx.restore();
+  }
+
+  // Jellyfish: a scalloped dome with tentacles that drift behind it as it
+  // bobs along.
+  function drawJellyfish(x, y, warn) {
+    ctx.save(); ctx.translate(x, y);
+    drawHazardShimmer(warn);
+    ctx.translate(0, Math.sin(elapsed * 2.4) * 3); // gentle bob
+
+    const drift = Math.sin(elapsed * 2) * 4;
+    // Vivian's colours: the original deep pink dome, with distinctly darker
+    // tentacles underneath so the two halves read apart.
+    ctx.strokeStyle = '#8E1B3A'; ctx.lineWidth = 2.8; ctx.lineCap = 'round';
+    for (let i = 0; i < 5; i++) {
+      const tx = -14 + i * 7;
+      ctx.beginPath();
+      ctx.moveTo(tx, 6);
+      ctx.quadraticCurveTo(tx - 3 + drift, 16, tx + 1 + drift, 25);
+      ctx.quadraticCurveTo(tx + 4 + drift * 1.2, 31, tx + 1 + drift * 1.5, 37);
+      ctx.stroke();
+    }
+
+    ctx.fillStyle = '#C2185B';
+    ctx.beginPath();
+    ctx.ellipse(0, 4, 20, 17, 0, Math.PI, Math.PI * 2); // top half of the dome
+    ctx.quadraticCurveTo(15, 11, 10, 4);
+    ctx.quadraticCurveTo(5, 11, 0, 4);
+    ctx.quadraticCurveTo(-5, 11, -10, 4);
+    ctx.quadraticCurveTo(-15, 11, -20, 4);
+    ctx.fill();
+
+    ctx.fillStyle = 'rgba(255, 255, 255, 0.4)';
+    ctx.beginPath(); ctx.ellipse(-7, -6, 7, 4, -0.4, 0, Math.PI * 2); ctx.fill();
+
+    ctx.fillStyle = 'white';
+    ctx.beginPath(); ctx.arc(-7, -1, 3.4, 0, Math.PI * 2); ctx.fill();
+    ctx.beginPath(); ctx.arc(4, -1, 3.4, 0, Math.PI * 2); ctx.fill();
+    ctx.fillStyle = '#3d0c22';
+    ctx.beginPath(); ctx.arc(-7, -1, 1.7, 0, Math.PI * 2); ctx.fill();
+    ctx.beginPath(); ctx.arc(4, -1, 1.7, 0, Math.PI * 2); ctx.fill();
+    ctx.restore();
+  }
+
+  // Picks the right hazard art for this obstacle.
+  function drawObstacle(kind, x, y, warn) {
+    if (kind === 'urchin') drawSeaUrchin(x, y, warn);
+    else if (kind === 'jelly') drawJellyfish(x, y, warn);
+    else drawSpikyShell(x, y, warn);
+  }
+
+  function drawSpikyShell(x, y, warn) {
+    ctx.save(); ctx.translate(x, y);
+    drawHazardShimmer(warn);
+    ctx.rotate(Math.sin(elapsed * 3) * 0.2);
 
     ctx.fillStyle = '#8B0000'; ctx.beginPath();
     ctx.moveTo(-5, -5); ctx.lineTo(-10, -20); ctx.lineTo(0, -10);
@@ -701,6 +839,62 @@
     // outfit and dolphin colours the player has bought.
   }
 
+  // Bubble weed: a curving stem studded with beads. The beads are placed by
+  // walking the SAME curve the stem is drawn from, so they always sit on it.
+  function drawBubbleWeed(sway, h) {
+    ctx.strokeStyle = '#1B5E45'; ctx.lineWidth = 3.4;
+    ctx.beginPath();
+    ctx.moveTo(0, 0);
+    ctx.quadraticCurveTo(sway * 0.4, -h * 0.55, sway, -h);
+    ctx.stroke();
+
+    ctx.fillStyle = '#2A7D5C';
+    for (let t = 0.16; t <= 1.001; t += 0.17) {
+      const mt = 1 - t;
+      const bx = 2 * mt * t * (sway * 0.4) + t * t * sway;
+      const by = 2 * mt * t * (-h * 0.55) + t * t * (-h);
+      ctx.beginPath(); ctx.arc(bx, by, 6 - t * 2, 0, Math.PI * 2); ctx.fill();
+    }
+  }
+
+  // Leafy clump: a short stem with rounded leaves fanning off the top half.
+  function drawLeafyClump(sway, h) {
+    ctx.strokeStyle = '#1B5E45'; ctx.lineWidth = 3.4;
+    ctx.beginPath();
+    ctx.moveTo(0, 0);
+    ctx.quadraticCurveTo(sway * 0.4, -h * 0.6, sway, -h);
+    ctx.stroke();
+
+    ctx.fillStyle = '#2A7D5C';
+    // [how far up the stem, sideways offset, tilt]
+    const leaves = [[0.52, -12, -0.5], [0.60, 12, 0.45], [0.76, -10, -0.35],
+                    [0.84, 10, 0.4], [0.96, 0, -0.05]];
+    leaves.forEach(leaf => {
+      const t = leaf[0], mt = 1 - t;
+      const bx = 2 * mt * t * (sway * 0.4) + t * t * sway + leaf[1];
+      const by = 2 * mt * t * (-h * 0.6) + t * t * (-h);
+      ctx.save(); ctx.translate(bx, by); ctx.rotate(leaf[2]);
+      ctx.beginPath(); ctx.ellipse(0, 0, 11, 7, 0, 0, Math.PI * 2); ctx.fill();
+      ctx.restore();
+    });
+  }
+
+  function drawSeaweed() {
+    const rootY = viewH - FLOOR_HEIGHT + 6;
+    ctx.save();
+    ctx.globalAlpha = 0.9;
+    ctx.lineCap = 'round';
+    seaweed.forEach(p => {
+      if (p.x < -70 || p.x > viewW + 70) return;
+      const sway = Math.sin(elapsed * 1.4 + p.phase) * 9;
+      ctx.save(); ctx.translate(p.x, rootY);
+      if (p.kind === 'bubble') drawBubbleWeed(sway, p.height);
+      else drawLeafyClump(sway, p.height);
+      ctx.restore();
+    });
+    ctx.restore();
+  }
+
   function draw() {
     const waterLine = waterLineY();
 
@@ -729,6 +923,10 @@
       ctx.fillText('🦪', scrollX, viewH - 25);
       ctx.fillText('⭐', scrollX + 100, viewH - 10);
     }
+
+    // SEAWEED — drawn here so it sits behind the dolphin and the treasures,
+    // and gets tinted by the translucent water drawn later on.
+    drawSeaweed();
 
     // HERO (drawn before the water so the translucent water tints it when
     // the dolphin is submerged — that's what makes diving look right)
@@ -784,7 +982,7 @@
         const warn = gap >= 0
           ? Math.max(0, 1 - gap / SHELL_WARN_DISTANCE)
           : Math.max(0, 1 + gap / 120);
-        drawSpikyShell(Math.round(obs.x), Math.round(obs.y), warn);
+        drawObstacle(obs.kind, Math.round(obs.x), Math.round(obs.y), warn);
       });
     }
 
@@ -906,6 +1104,7 @@
     elapsed += dt;
 
     ctx.clearRect(0, 0, viewW, viewH);
+    updateSeaweed(dt); // outside update() so it drifts on the start screen too
     if (gameState === 'PLAYING') spawn(dt);
     update(dt);
     draw();
