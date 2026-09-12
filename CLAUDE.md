@@ -61,7 +61,18 @@ while dodging spiky shells. Endless.
 - **Lives (3 to start) and a GAME OVER screen** with the final score and a **Try Again
   button** you have to actually hit — tapping anywhere used to wipe the score before you'd
   read it. Enter still works.
-- **Start screen** with the title, Vivian's credit, and a blinking prompt.
+- **Start screen** with the title, Vivian's credit, a **How to play** button and a blinking
+  prompt. Tapping the button opens the `HOWTO` page; tapping anywhere else still just starts
+  the game.
+- **How-to-play page** (`HOWTO` state): explains the physics (hold to swim up, and that
+  dolphins can't fly so you have to jump), then lists every collectible with its value and
+  every hazard. Two things keep it honest: the icons are drawn by calling the game's OWN
+  drawing functions, and the values are printed from `GEM_VALUE` / `DONUT_VALUE` /
+  `RAINBOW_VALUE` / `START_LIVES`. Restyle a sprite or change a score and the page follows —
+  don't replace either with hand-drawn copies or typed-in numbers.
+  The hazards are drawn mid-warning (`warn: 0.55`) so you learn the red glow here rather than
+  the first time it costs a life. The hero is deliberately NOT drawn behind this page — she
+  bobs at screen centre, right where the icon legend sits.
 - Clouds, a scrolling sandy seafloor, and a responsive HUD that scales to the screen.
 - **The dolphin's x position is responsive** (`playerHomeX()`): a quarter of the screen
   width, capped at 200px, floored at 90px. On a phone a fixed 200px was over half the screen
@@ -75,6 +86,12 @@ while dodging spiky shells. Endless.
   lavender. I once flagged the jellyfish as looking too much like the pink donut; it doesn't,
   because the jellyfish is always tinted and the donut is always in the untinted sky. Judging
   an underwater sprite in isolation gives the wrong answer.
+- **Full-screen pages need a landscape layout, not just smaller text.** A phone held
+  sideways is only ~375px tall. Shrinking the how-to page to fit drove its text to ~9px, so
+  it switches to two columns instead (`howToLayout().wide`). Scaling alone is not a
+  responsive strategy when a child has to read the result.
+- **Buttons need a floor of 48px, not 42.** Height-based sizing bottoms out in landscape and
+  silently lands under the 44pt minimum tap target.
 - **Test at 375px wide.** Every bug Vivian and Erik have hit was mobile-only and invisible on
   a desktop viewport — the dolphin sitting too far right, the game-over misfire, and a wedge
   of missing water caused by a loop that stepped in 20px jumps (1280 divides by 20; 375

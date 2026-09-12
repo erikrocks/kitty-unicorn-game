@@ -160,6 +160,44 @@
     };
   }
 
+  // The "How to play" button on the start screen.
+  function howToButtonRect() {
+    const w = Math.max(160, Math.min(240, viewW * 0.44));
+    // Floor of 48 keeps it above the 44pt minimum tap target even on a short
+    // landscape phone, where the height-based sizing bottoms out.
+    const h = Math.max(48, Math.min(58, viewH * 0.062));
+    return { x: viewW / 2 - w / 2, y: viewH / 2 + 24, w: w, h: h };
+  }
+
+  // The how-to-play page is laid out in fixed "natural" units and then scaled
+  // to fit the screen. A phone held sideways has plenty of width but almost no
+  // height, so it switches to TWO COLUMNS there — shrinking a single column to
+  // fit 375px of height drove the text down to ~9px, which a child can't read.
+  function howToLayout() {
+    const wide = viewH < 520 && viewW > 560;
+    const natW = wide ? 660 : 330;
+    const natH = wide ? 330 : 480;
+    const scale = Math.min(1, (viewH - 30) / natH, (viewW - 30) / natW);
+    return { wide: wide, s: scale, cx: viewW / 2, top: (viewH - natH * scale) / 2 };
+  }
+
+  // Where everything sits, in natural units, for each of the two shapes.
+  function howToSlots(wide) {
+    return wide
+      ? { titleX: -165, titleY: 30, physX: -165, p1: 88, p2: 122, p3: 148,
+          goodX: 165, goodY: 30, iconsY: 74, valuesY: 114,
+          badX: 165, badY: 156, hazY: 202, w1: 250, w2: 270, backY: 278 }
+      : { titleX: 0, titleY: 26, physX: 0, p1: 74, p2: 102, p3: 126,
+          goodX: 0, goodY: 170, iconsY: 212, valuesY: 250,
+          badX: 0, badY: 292, hazY: 336, w1: 388, w2: 408, backY: 424 };
+  }
+
+  function howToBackRect() {
+    const L = howToLayout();
+    const w = 150 * L.s, h = 46 * L.s;
+    return { x: L.cx - w / 2, y: L.top + howToSlots(L.wide).backY * L.s, w: w, h: h };
+  }
+
   function pointInRect(px, py, r) {
     return px >= r.x && px <= r.x + r.w && py >= r.y && py <= r.y + r.h;
   }
@@ -373,7 +411,12 @@
     initAudio();
 
     if (gameState === 'START') {
-      handleGameStart();
+      // Tapping the button opens the instructions; tapping anywhere else
+      // still just starts the game, the way it always has.
+      if (pointInRect(pointerX, pointerY, howToButtonRect())) gameState = 'HOWTO';
+      else handleGameStart();
+    } else if (gameState === 'HOWTO') {
+      gameState = 'START'; // any tap goes back — nothing to lose by closing it
     } else if (gameState === 'GAMEOVER') {
       // You have to actually hit the Try Again button. A stray tap anywhere
       // else does nothing, so your score stays on screen until you're ready.
@@ -391,7 +434,11 @@
 
   window.addEventListener('keydown', (e) => {
     if (e.code === 'Enter') {
-      if (gameState === 'START' || gameState === 'GAMEOVER') {
+      if (gameState === 'HOWTO') {
+        gameState = 'START'; // Enter closes the instructions rather than
+                             // launching straight into a game, so you always
+                             // land back somewhere you recognise
+      } else if (gameState === 'START' || gameState === 'GAMEOVER') {
         initAudio();
         handleGameStart();
       }
@@ -895,6 +942,86 @@
     ctx.restore();
   }
 
+  // Draws one of the game's own sprites at a given spot and size. Using the
+  // real drawing functions means this legend can never drift out of sync with
+  // how things actually look in the game.
+  function drawLegendIcon(fn, x, y, scale, warn) {
+    ctx.save();
+    ctx.translate(x, y);
+    ctx.scale(scale, scale);
+    fn(0, 0, warn);
+    ctx.restore();
+  }
+
+  function drawHowToPage() {
+    const L = howToLayout();
+    const P = howToSlots(L.wide);
+    const y = n => L.top + n * L.s;            // natural units -> screen y
+    const x = n => L.cx + n * L.s;             // natural units -> screen x
+    const f = n => `${n * L.s}px Arial`;
+
+    ctx.fillStyle = 'rgba(0, 0, 0, 0.82)';
+    ctx.fillRect(0, 0, viewW, viewH);
+    ctx.textAlign = 'center';
+
+    ctx.fillStyle = '#FFD700'; ctx.font = 'bold ' + f(26);
+    ctx.fillText('HOW TO PLAY', x(P.titleX), y(P.titleY));
+
+    // --- the physics: the one thing you can't work out by looking ---
+    ctx.fillStyle = 'white'; ctx.font = 'bold ' + f(17);
+    ctx.fillText('Hold to swim up. Let go to sink.', x(P.physX), y(P.p1));
+    ctx.fillStyle = '#9FE8FF'; ctx.font = f(15);
+    ctx.fillText("Dolphins can't fly — they JUMP!", x(P.physX), y(P.p2));
+    ctx.fillText('Leap out of the water for sky treats.', x(P.physX), y(P.p3));
+
+    // --- what's worth what. Values are printed from the constants, so the
+    // --- legend can't end up lying about the score.
+    ctx.fillStyle = '#7CFFB2'; ctx.font = 'bold ' + f(15);
+    ctx.fillText('COLLECT THESE', x(P.goodX), y(P.goodY));
+
+    const gx = [-126, -42, 42, 126].map(d => x(P.goodX + d));
+    drawLegendIcon(drawGem,     gx[0], y(P.iconsY), 1.0 * L.s);
+    drawLegendIcon(drawDonut,   gx[1], y(P.iconsY), 1.0 * L.s);
+    drawLegendIcon(drawRainbow, gx[2], y(P.iconsY), 0.62 * L.s);
+    drawLegendIcon(drawHeart,   gx[3], y(P.iconsY - 2), 1.0 * L.s);
+
+    ctx.fillStyle = 'white'; ctx.font = 'bold ' + f(14);
+    ctx.fillText(GEM_VALUE,     gx[0], y(P.valuesY));
+    ctx.fillText(DONUT_VALUE,   gx[1], y(P.valuesY));
+    ctx.fillText(RAINBOW_VALUE, gx[2], y(P.valuesY));
+    ctx.font = 'bold ' + f(12.5);
+    ctx.fillText('+1 life',     gx[3], y(P.valuesY));
+
+    // --- what hurts. Drawn mid-warning so the red glow is learnt right here
+    // --- rather than the first time it costs you a life.
+    ctx.fillStyle = '#FF8A80'; ctx.font = 'bold ' + f(15);
+    ctx.fillText('DODGE THESE', x(P.badX), y(P.badY));
+
+    const bx = [-100, 0, 100].map(d => x(P.badX + d));
+    drawLegendIcon(drawSpikyShell, bx[0], y(P.hazY), 0.85 * L.s, 0.55);
+    drawLegendIcon(drawSeaUrchin,  bx[1], y(P.hazY), 0.85 * L.s, 0.55);
+    drawLegendIcon(drawJellyfish,  bx[2], y(P.hazY - 6), 0.85 * L.s, 0.55);
+
+    ctx.fillStyle = '#FF8A80'; ctx.font = f(12.5);
+    ctx.fillText('They flash red before they reach you.', x(P.badX), y(P.w1));
+    ctx.fillText('Each one costs a life. You start with ' + START_LIVES + '.', x(P.badX), y(P.w2));
+
+    // --- back ---
+    const b = howToBackRect();
+    const hovered = pointInRect(pointerX, pointerY, b);
+    ctx.beginPath(); ctx.roundRect(b.x, b.y, b.w, b.h, b.h / 2);
+    ctx.fillStyle = hovered ? '#7FD4FF' : '#4FB8EE';
+    ctx.fill();
+    ctx.strokeStyle = 'white'; ctx.lineWidth = 3 * L.s; ctx.stroke();
+
+    ctx.fillStyle = '#05304A'; ctx.font = 'bold ' + f(19);
+    ctx.textBaseline = 'middle';
+    ctx.fillText('Back', L.cx, b.y + b.h / 2);
+    ctx.textBaseline = 'alphabetic';
+
+    ctx.textAlign = 'left';
+  }
+
   function draw() {
     const waterLine = waterLineY();
 
@@ -933,6 +1060,8 @@
     if (gameState === 'PLAYING') {
       drawHero(player.x, player.y, player.dy, player.y >= waterLine);
     } else if (gameState === 'START') {
+      // Deliberately NOT drawn on the how-to page: she bobs at the centre of
+      // the screen, which is exactly where the icon legend sits.
       let bobY = waterLine + Math.sin(elapsed * 3) * 10;
       // The bob's actual up/down speed, so the idle tilt matches the motion.
       drawHero(viewW / 2, bobY, Math.cos(elapsed * 3) * 30, true);
@@ -1006,19 +1135,40 @@
       let creditFont = Math.max(12, Math.min(24, viewW * 0.035));
       let promptFont = Math.max(14, Math.min(30, viewW * 0.045));
 
+      // Each line is placed relative to the one above it. The old version
+      // measured title and credits from the screen centre independently, so on
+      // a narrow phone (where the title shrinks but the credit doesn't) they
+      // collided.
+      const titleY = viewH / 2 - titleFont * 2.4;
       ctx.fillStyle = '#FF69B4';
       ctx.font = `bold ${titleFont}px Arial`;
-      ctx.fillText('Kitty Unicorn Dolphin Rider', viewW / 2, viewH / 2 - titleFont * 2);
+      ctx.fillText('Kitty Unicorn Dolphin Rider', viewW / 2, titleY);
 
       ctx.fillStyle = 'white';
       ctx.font = `${creditFont}px Arial`;
-      ctx.fillText('Designed and built by 7 year old Vivian,', viewW / 2, viewH / 2 - creditFont * 2.5);
-      ctx.fillText('with some help from AI.', viewW / 2, viewH / 2 - creditFont * 1.0);
+      const creditY = titleY + titleFont * 0.85 + creditFont * 1.1;
+      ctx.fillText('Designed and built by 7 year old Vivian,', viewW / 2, creditY);
+      ctx.fillText('with some help from AI.', viewW / 2, creditY + creditFont * 1.5);
 
+      // --- HOW TO PLAY button ---
+      const hb = howToButtonRect();
+      const hbHover = pointInRect(pointerX, pointerY, hb);
+      ctx.beginPath(); ctx.roundRect(hb.x, hb.y, hb.w, hb.h, hb.h / 2);
+      ctx.fillStyle = hbHover ? 'rgba(255, 255, 255, 0.28)' : 'rgba(255, 255, 255, 0.14)';
+      ctx.fill();
+      ctx.strokeStyle = 'rgba(255, 255, 255, 0.85)'; ctx.lineWidth = 2.5; ctx.stroke();
+      ctx.fillStyle = 'white';
+      ctx.font = `bold ${Math.min(20, hb.h * 0.4)}px Arial`;
+      ctx.textBaseline = 'middle';
+      ctx.fillText('How to play', viewW / 2, hb.y + hb.h / 2);
+      ctx.textBaseline = 'alphabetic';
+
+      // The prompt sits below the button, measured FROM it, so the two can
+      // never overlap on an awkward screen size.
       ctx.fillStyle = '#FFD700';
       ctx.font = `bold ${promptFont}px Arial`;
       ctx.globalAlpha = 0.5 + Math.abs(Math.sin(elapsed * 3)) * 0.5;
-      ctx.fillText('Click or press Enter to Start!', viewW / 2, viewH / 2 + promptFont * 4.5);
+      ctx.fillText('Click or press Enter to Start!', viewW / 2, hb.y + hb.h + promptFont * 2.0);
       ctx.globalAlpha = 1.0;
 
       ctx.textAlign = 'left';
@@ -1082,6 +1232,8 @@
 
       ctx.textAlign = 'left';
     }
+
+    if (gameState === 'HOWTO') drawHowToPage();
 
     // TODO: shop screen — a 'SHOP' gameState drawn here, spending `score`.
   }
