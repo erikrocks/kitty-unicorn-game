@@ -111,6 +111,11 @@ while dodging spiky shells. Endless.
 - Prefer simple, readable code a beginner can follow over clever optimizations.
 - Add short comments explaining the "why," not just the "what."
 
+## How the code actually works
+See **[ARCHITECTURE.md](ARCHITECTURE.md)** — draw order, the delta-time and `viewW`/`viewH`
+invariants, spawn tables, collision boxes, and an "if you change X, check Y" table. Read it
+before any non-trivial change; this file is the rules, that one is the mechanics.
+
 ## Working on this file
 - **The preview pane snapshots `index.html` as a `data:` URL.** `navigate` and
   `location.reload()` will NOT pick up your edits — close the tab and open a fresh preview,
