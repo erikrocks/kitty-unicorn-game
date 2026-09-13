@@ -136,8 +136,9 @@ bytes instead:
 curl -sS -o /tmp/live.html "https://kudr.eriksheridan.com/?cb=$RANDOM"; diff /tmp/live.html index.html
 ```
 
-Separately: `erikrocks/eriksheridan.com` still has **Enforce HTTPS off** — unrelated to this
-game, but worth flipping.
+Separately: `erikrocks/eriksheridan.com` now has **Enforce HTTPS on** (flipped Sep 2026),
+and the apex is no longer a resume — it's a menu linking to this game, EBAAPL and
+`resume.eriksheridan.com`. Full architecture lives in that repo's `CLAUDE.md`.
 
 ## Roadmap (later — one at a time, don't build ahead)
 1. ~~Gem types worth different amounts~~ — done (gem 10 / donut 50 / heart +1 life).
