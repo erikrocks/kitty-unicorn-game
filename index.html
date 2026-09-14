@@ -98,6 +98,25 @@
   const RAINBOW_VALUE = 116;  // Vivian's pick — 16 is her lucky number
   const START_LIVES = 3;
 
+  // --- LEADERBOARD ------------------------------------------------------
+  // This publishable key is MEANT to be public. The table has Row Level
+  // Security allowing only SELECT and INSERT, so the worst anyone can do with
+  // it is add a score — it cannot be used to edit or delete the board, or to
+  // reach anything else. (Verified: PATCH and DELETE match zero rows.)
+  //
+  // Scores are forgeable by anyone who opens devtools. That's unavoidable for
+  // a browser game with no accounts, and fine for this one.
+  const SUPABASE_URL = 'https://dsandoakgeceuzyhwxhg.supabase.co';
+  const SUPABASE_KEY = 'sb_publishable_p7QhKoUFYdj1alM5Sx5hkQ_Q7JxR4gi';
+  const LEADERBOARD_SIZE = 10;
+  const NET_TIMEOUT_MS = 6000;
+
+  // Three letters can spell things you'd rather not see on a child's game.
+  // Not exhaustive and not a security boundary — just a decency filter.
+  const BLOCKED_INITIALS = ['ASS','ARS','FUK','FCK','FUC','SHT','SHI','CUM',
+    'TIT','DIK','DIC','COK','CNT','PIS','PSS','WTF','KKK','FAG','NIG','HOE',
+    'SLT','ANL','SEX','JIZ','TWT'];
+
   // If the browser tab is hidden for a while, the next frame's time gap is
   // huge and would teleport the dolphin. Clamping it makes the game just
   // pick up smoothly instead.
@@ -160,15 +179,6 @@
     };
   }
 
-  // The "How to play" button on the start screen.
-  function howToButtonRect() {
-    const w = Math.max(160, Math.min(240, viewW * 0.44));
-    // Floor of 48 keeps it above the 44pt minimum tap target even on a short
-    // landscape phone, where the height-based sizing bottoms out.
-    const h = Math.max(48, Math.min(58, viewH * 0.062));
-    return { x: viewW / 2 - w / 2, y: viewH / 2 + 24, w: w, h: h };
-  }
-
   // The how-to-play page is laid out in fixed "natural" units and then scaled
   // to fit the screen. A phone held sideways has plenty of width but almost no
   // height, so it switches to TWO COLUMNS there — shrinking a single column to
@@ -198,6 +208,74 @@
     return { x: L.cx - w / 2, y: L.top + howToSlots(L.wide).backY * L.s, w: w, h: h };
   }
 
+  // Start screen now has two buttons side by side. Both are laid out from one
+  // place so they can never overlap or drift apart.
+  function startButtonRects() {
+    const gap = 12;
+    const total = Math.max(300, Math.min(420, viewW * 0.86));
+    const w = (total - gap) / 2;
+    const h = Math.max(48, Math.min(58, viewH * 0.062));
+    const y = viewH / 2 + 24;
+    return {
+      howTo: { x: viewW / 2 - total / 2, y: y, w: w, h: h },
+      board: { x: viewW / 2 - total / 2 + w + gap, y: y, w: w, h: h }
+    };
+  }
+
+  // --- initials entry ---
+  function initialsLayout() {
+    const s = Math.min(1, (viewH - 40) / 420, (viewW - 30) / 320);
+    return { s: s, cx: viewW / 2, top: (viewH - 420 * s) / 2 };
+  }
+  function initialsSlotRect(i) {
+    const L = initialsLayout();
+    const w = 64 * L.s, h = 84 * L.s, gap = 16 * L.s;
+    const total = w * 3 + gap * 2;
+    return { x: L.cx - total / 2 + i * (w + gap), y: L.top + 150 * L.s, w: w, h: h };
+  }
+  function initialsChevronRect(i, up) {
+    const slot = initialsSlotRect(i);
+    const L = initialsLayout();
+    const h = Math.max(42, 42 * L.s);   // floored: still tappable when scaled
+    return { x: slot.x, y: up ? slot.y - h - 6 * L.s : slot.y + slot.h + 6 * L.s,
+             w: slot.w, h: h };
+  }
+
+  // Save and Skip sit SIDE BY SIDE, not stacked. Stacked, two floored-height
+  // buttons plus their gap overflowed the bottom of a landscape phone.
+  function initialsButtonRow() {
+    const L = initialsLayout();
+    const h = Math.max(48, 52 * L.s);
+    const saveW = Math.max(130, 170 * L.s);
+    const skipW = Math.max(96, 120 * L.s);
+    const gap = 14 * L.s;
+    const total = saveW + gap + skipW;
+    const y = L.top + 332 * L.s;
+    return {
+      save: { x: L.cx - total / 2, y: y, w: saveW, h: h },
+      skip: { x: L.cx - total / 2 + saveW + gap, y: y, w: skipW, h: h }
+    };
+  }
+  function initialsSaveRect() { return initialsButtonRow().save; }
+  function initialsSkipRect() { return initialsButtonRow().skip; }
+
+  // --- leaderboard ---
+  function boardLayout() {
+    const s = Math.min(1, (viewH - 30) / 520, (viewW - 24) / 340);
+    return { s: s, cx: viewW / 2, top: (viewH - 520 * s) / 2 };
+  }
+  function boardTabRect(i) {
+    const L = boardLayout();
+    const w = 104 * L.s, h = Math.max(40, 38 * L.s), gap = 6 * L.s;
+    const total = w * 3 + gap * 2;
+    return { x: L.cx - total / 2 + i * (w + gap), y: L.top + 58 * L.s, w: w, h: h };
+  }
+  function boardBackRect() {
+    const L = boardLayout();
+    const w = Math.max(130, 150 * L.s), h = Math.max(46, 46 * L.s);
+    return { x: L.cx - w / 2, y: L.top + 462 * L.s, w: w, h: h };
+  }
+
   function pointInRect(px, py, r) {
     return px >= r.x && px <= r.x + r.w && py >= r.y && py <= r.y + r.h;
   }
@@ -208,6 +286,15 @@
   let lives = START_LIVES;
   let gameState = 'START';
   let elapsed = 0; // seconds since load — drives all the wobble animations
+
+  // --- leaderboard state ---
+  const board = { all: null, month: null, week: null };   // null = not loaded
+  let boardTab = 'all';
+  let boardStatus = 'idle';      // idle | loading | ok | error
+  let initials = ['A', 'A', 'A'];
+  let initialsSlot = 0;
+  let pendingScore = 0;          // the score waiting to be saved
+  let submitStatus = 'idle';     // idle | sending | done | error
 
   const player = { x: playerHomeX(), y: viewH / 2, dy: 0 };
   const items = [];
@@ -258,6 +345,78 @@
     player.x = playerHomeX(); // re-centre for the new width (e.g. phone rotated)
     if (player.y > viewH - 80) player.y = viewH - 80;
   });
+
+  // Calendar periods, not rolling windows — everyone's board resets together,
+  // so there's a fresh start to race for. Week starts Monday.
+  function periodStart(period) {
+    const now = new Date();
+    if (period === 'month') return new Date(now.getFullYear(), now.getMonth(), 1);
+    if (period === 'week') {
+      const d = new Date(now.getFullYear(), now.getMonth(), now.getDate());
+      d.setDate(d.getDate() - ((d.getDay() + 6) % 7)); // Monday = 0
+      return d;
+    }
+    return null; // all time
+  }
+
+  function supaHeaders() {
+    return { apikey: SUPABASE_KEY, Authorization: 'Bearer ' + SUPABASE_KEY,
+             'Content-Type': 'application/json' };
+  }
+
+  // Every network call in this game returns null on ANY failure rather than
+  // throwing. The game has to stay playable with no internet at all, so a
+  // dead leaderboard must never be able to break a frame.
+  async function loadScores(period) {
+    try {
+      let url = SUPABASE_URL + '/rest/v1/scores?select=initials,score' +
+                '&order=score.desc&limit=' + LEADERBOARD_SIZE;
+      const since = periodStart(period);
+      if (since) url += '&created_at=gte.' + encodeURIComponent(since.toISOString());
+
+      const res = await fetch(url, {
+        headers: supaHeaders(),
+        signal: AbortSignal.timeout(NET_TIMEOUT_MS)
+      });
+      if (!res.ok) return null;
+      return await res.json();
+    } catch (e) {
+      return null;
+    }
+  }
+
+  async function submitScore(name, value) {
+    try {
+      const res = await fetch(SUPABASE_URL + '/rest/v1/scores', {
+        method: 'POST',
+        headers: supaHeaders(),
+        body: JSON.stringify({ initials: name, score: value }),
+        signal: AbortSignal.timeout(NET_TIMEOUT_MS)
+      });
+      return res.ok;
+    } catch (e) {
+      return false;
+    }
+  }
+
+  function refreshBoard(period) {
+    boardStatus = 'loading';
+    loadScores(period).then(rows => {
+      board[period] = rows;                       // null means "couldn't load"
+      boardStatus = rows === null ? 'error' : 'ok';
+    });
+  }
+
+  // Did this run earn a place? If we can't reach the server we say no, so the
+  // player is never asked for initials we then fail to save.
+  async function qualifiesForBoard(value) {
+    if (value <= 0) return false;
+    const rows = await loadScores('all');
+    if (rows === null) return false;
+    board.all = rows;
+    if (rows.length < LEADERBOARD_SIZE) return true;
+    return value > rows[rows.length - 1].score;
+  }
 
   // Keeps a "keep this fraction of speed every 1/60s" drag feeling the same
   // no matter the frame rate.
@@ -398,6 +557,32 @@
   let pointerX = -1;
   let pointerY = -1;
 
+  function cycleLetter(i, dir) {
+    const code = initials[i].charCodeAt(0) - 65;
+    initials[i] = String.fromCharCode(65 + ((code + dir) % 26 + 26) % 26);
+    initialsSlot = i;
+  }
+
+  function openLeaderboard() {
+    gameState = 'LEADERBOARD';
+    boardTab = 'all';
+    refreshBoard('all');
+  }
+
+  function saveInitials() {
+    if (submitStatus === 'sending') return;
+    let name = initials.join('');
+    if (BLOCKED_INITIALS.indexOf(name) !== -1) name = 'AAA'; // quietly tidied
+    submitStatus = 'sending';
+    submitScore(name, pendingScore).then(ok => {
+      submitStatus = ok ? 'done' : 'error';
+      if (ok) {
+        board.all = board.month = board.week = null; // force a re-fetch
+        openLeaderboard();
+      }
+    });
+  }
+
   function readPointerPos(e) {
     if (!e) return;
     const t = (e.touches && e.touches[0]) || (e.changedTouches && e.changedTouches[0]);
@@ -411,10 +596,30 @@
     initAudio();
 
     if (gameState === 'START') {
-      // Tapping the button opens the instructions; tapping anywhere else
-      // still just starts the game, the way it always has.
-      if (pointInRect(pointerX, pointerY, howToButtonRect())) gameState = 'HOWTO';
+      // Tapping a button opens that page; tapping anywhere else still just
+      // starts the game, the way it always has.
+      const sb = startButtonRects();
+      if (pointInRect(pointerX, pointerY, sb.howTo)) gameState = 'HOWTO';
+      else if (pointInRect(pointerX, pointerY, sb.board)) openLeaderboard();
       else handleGameStart();
+    } else if (gameState === 'ENTER_INITIALS') {
+      for (let i = 0; i < 3; i++) {
+        if (pointInRect(pointerX, pointerY, initialsChevronRect(i, true)))  { cycleLetter(i, +1); return; }
+        if (pointInRect(pointerX, pointerY, initialsChevronRect(i, false))) { cycleLetter(i, -1); return; }
+        if (pointInRect(pointerX, pointerY, initialsSlotRect(i)))           { initialsSlot = i; return; }
+      }
+      if (pointInRect(pointerX, pointerY, initialsSaveRect())) saveInitials();
+      else if (pointInRect(pointerX, pointerY, initialsSkipRect())) gameState = 'GAMEOVER';
+    } else if (gameState === 'LEADERBOARD') {
+      for (let i = 0; i < 3; i++) {
+        if (pointInRect(pointerX, pointerY, boardTabRect(i))) {
+          boardTab = ['all', 'month', 'week'][i];
+          if (board[boardTab] === null || board[boardTab] === undefined) refreshBoard(boardTab);
+          else boardStatus = 'ok';
+          return;
+        }
+      }
+      if (pointInRect(pointerX, pointerY, boardBackRect())) gameState = 'START';
     } else if (gameState === 'HOWTO') {
       gameState = 'START'; // any tap goes back — nothing to lose by closing it
     } else if (gameState === 'GAMEOVER') {
@@ -433,6 +638,25 @@
   window.addEventListener('touchend', () => isPressing = false);
 
   window.addEventListener('keydown', (e) => {
+    // --- initials entry has its own keyboard handling ---
+    if (gameState === 'ENTER_INITIALS') {
+      if (e.key && /^[a-zA-Z]$/.test(e.key)) {
+        initials[initialsSlot] = e.key.toUpperCase();
+        if (initialsSlot < 2) initialsSlot++;
+      } else if (e.code === 'ArrowUp')    cycleLetter(initialsSlot, +1);
+      else if (e.code === 'ArrowDown')    cycleLetter(initialsSlot, -1);
+      else if (e.code === 'ArrowLeft')    initialsSlot = Math.max(0, initialsSlot - 1);
+      else if (e.code === 'ArrowRight')   initialsSlot = Math.min(2, initialsSlot + 1);
+      else if (e.code === 'Backspace')    initialsSlot = Math.max(0, initialsSlot - 1);
+      else if (e.code === 'Enter')        saveInitials();
+      else if (e.code === 'Escape')       gameState = 'GAMEOVER';
+      e.preventDefault();
+      return;
+    }
+    if (gameState === 'LEADERBOARD' && (e.code === 'Enter' || e.code === 'Escape')) {
+      gameState = 'START'; e.preventDefault(); return;
+    }
+
     if (e.code === 'Enter') {
       if (gameState === 'HOWTO') {
         gameState = 'START'; // Enter closes the instructions rather than
@@ -601,6 +825,19 @@
         if (lives <= 0) {
           gameState = 'GAMEOVER';
           isPressing = false;
+          // Ask the board whether this run earned a place. If we can't reach
+          // it, qualifiesForBoard returns false and the player simply never
+          // sees the initials screen — no error, no blocked game.
+          pendingScore = score;
+          submitStatus = 'idle';
+          initials = ['A', 'A', 'A'];
+          initialsSlot = 0;
+          const runScore = score;
+          qualifiesForBoard(runScore).then(yes => {
+            if (yes && gameState === 'GAMEOVER' && score === runScore) {
+              gameState = 'ENTER_INITIALS';
+            }
+          });
         }
       } else if (obstacles[i].x < -50) {
         obstacles.splice(i, 1);
@@ -1022,6 +1259,151 @@
     ctx.textAlign = 'left';
   }
 
+  // Shared pill-button drawing, so every button in the game looks the same.
+  function drawPill(r, label, fill, fillHover, textColor, fontPx) {
+    const hovered = pointInRect(pointerX, pointerY, r);
+    ctx.beginPath(); ctx.roundRect(r.x, r.y, r.w, r.h, r.h / 2);
+    ctx.fillStyle = hovered ? fillHover : fill;
+    ctx.fill();
+    ctx.strokeStyle = 'white'; ctx.lineWidth = Math.max(2, r.h * 0.06); ctx.stroke();
+    ctx.fillStyle = textColor;
+    ctx.font = `bold ${fontPx}px Arial`;
+    ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
+    ctx.fillText(label, r.x + r.w / 2, r.y + r.h / 2);
+    ctx.textBaseline = 'alphabetic';
+  }
+
+  function drawEnterInitials() {
+    const L = initialsLayout();
+    const y = n => L.top + n * L.s;
+    const f = n => `${n * L.s}px Arial`;
+
+    ctx.fillStyle = 'rgba(0, 0, 0, 0.82)';
+    ctx.fillRect(0, 0, viewW, viewH);
+    ctx.textAlign = 'center';
+
+    ctx.fillStyle = '#FFD700'; ctx.font = 'bold ' + f(30);
+    ctx.fillText('NEW HIGH SCORE!', L.cx, y(40));
+    ctx.fillStyle = 'white'; ctx.font = 'bold ' + f(22);
+    ctx.fillText(pendingScore, L.cx, y(78));
+    ctx.fillStyle = '#9FE8FF'; ctx.font = f(14);
+    ctx.fillText('Put your initials on the board', L.cx, y(110));
+
+    for (let i = 0; i < 3; i++) {
+      const slot = initialsSlotRect(i);
+      const active = i === initialsSlot;
+
+      // chevrons
+      ctx.fillStyle = active ? '#FFD700' : 'rgba(255,255,255,0.55)';
+      [true, false].forEach(up => {
+        const c = initialsChevronRect(i, up);
+        const midX = c.x + c.w / 2, midY = c.y + c.h / 2, s2 = 10 * L.s;
+        ctx.beginPath();
+        if (up) { ctx.moveTo(midX, midY - s2); ctx.lineTo(midX + s2, midY + s2); ctx.lineTo(midX - s2, midY + s2); }
+        else    { ctx.moveTo(midX, midY + s2); ctx.lineTo(midX + s2, midY - s2); ctx.lineTo(midX - s2, midY - s2); }
+        ctx.closePath(); ctx.fill();
+      });
+
+      ctx.beginPath(); ctx.roundRect(slot.x, slot.y, slot.w, slot.h, 10 * L.s);
+      ctx.fillStyle = active ? 'rgba(255,215,0,0.18)' : 'rgba(255,255,255,0.10)';
+      ctx.fill();
+      ctx.strokeStyle = active ? '#FFD700' : 'rgba(255,255,255,0.5)';
+      ctx.lineWidth = 3 * L.s; ctx.stroke();
+
+      ctx.fillStyle = 'white'; ctx.font = 'bold ' + f(44);
+      ctx.textBaseline = 'middle';
+      ctx.fillText(initials[i], slot.x + slot.w / 2, slot.y + slot.h / 2);
+      ctx.textBaseline = 'alphabetic';
+    }
+
+    const saveLabel = submitStatus === 'sending' ? 'Saving...' :
+                      submitStatus === 'error'   ? 'Try again' : 'Save';
+    drawPill(initialsSaveRect(), saveLabel, '#4FB8EE', '#7FD4FF', '#05304A', 20 * L.s);
+    drawPill(initialsSkipRect(), 'Skip', 'rgba(255,255,255,0.12)',
+             'rgba(255,255,255,0.24)', 'white', 15 * L.s);
+
+    if (submitStatus === 'error') {
+      ctx.fillStyle = '#FF8A80'; ctx.font = f(12.5);
+      ctx.fillText("Couldn't reach the scoreboard.", L.cx, initialsSaveRect().y - 14 * L.s);
+    }
+    ctx.textAlign = 'left';
+  }
+
+  function drawLeaderboard() {
+    const L = boardLayout();
+    const y = n => L.top + n * L.s;
+    const f = n => `${n * L.s}px Arial`;
+
+    ctx.fillStyle = 'rgba(0, 0, 0, 0.84)';
+    ctx.fillRect(0, 0, viewW, viewH);
+    ctx.textAlign = 'center';
+
+    ctx.fillStyle = '#FFD700'; ctx.font = 'bold ' + f(26);
+    ctx.fillText('HIGH SCORES', L.cx, y(30));
+
+    const labels = ['ALL TIME', 'THIS MONTH', 'THIS WEEK'];
+    const keys = ['all', 'month', 'week'];
+    for (let i = 0; i < 3; i++) {
+      const r = boardTabRect(i);
+      const on = keys[i] === boardTab;
+      ctx.beginPath(); ctx.roundRect(r.x, r.y, r.w, r.h, 8 * L.s);
+      ctx.fillStyle = on ? '#FFD700' : 'rgba(255,255,255,0.12)';
+      ctx.fill();
+      ctx.fillStyle = on ? '#2a2000' : 'white';
+      ctx.font = 'bold ' + f(12);
+      ctx.textBaseline = 'middle';
+      ctx.fillText(labels[i], r.x + r.w / 2, r.y + r.h / 2);
+      ctx.textBaseline = 'alphabetic';
+    }
+
+    const rows = board[boardTab];
+    // Anchor the list to the ACTUAL tab rect, so flooring the tab height for
+    // touch can't push the tabs down into the first row.
+    const tabs = boardTabRect(0);
+    const listY = tabs.y + tabs.h + 30 * L.s;
+    const rowStep = 32 * L.s;
+
+    if (boardStatus === 'loading' && !rows) {
+      ctx.fillStyle = 'white'; ctx.font = f(15);
+      ctx.fillText('Loading...', L.cx, listY + 30 * L.s);
+    } else if (rows === null || rows === undefined) {
+      ctx.fillStyle = '#FF8A80'; ctx.font = 'bold ' + f(15);
+      ctx.fillText("Can't reach the scoreboard", L.cx, listY + 20 * L.s);
+      ctx.fillStyle = '#FF8A80'; ctx.font = f(12.5);
+      ctx.fillText('You can still play — tap Back.', L.cx, listY + 44 * L.s);
+    } else if (rows.length === 0) {
+      ctx.fillStyle = '#9FE8FF'; ctx.font = 'bold ' + f(15);
+      ctx.fillText('No scores yet!', L.cx, listY + 20 * L.s);
+      ctx.fillStyle = '#9FE8FF'; ctx.font = f(12.5);
+      ctx.fillText('Be the first one on the board.', L.cx, listY + 44 * L.s);
+    } else {
+      ctx.textAlign = 'left';
+      const left = L.cx - 140 * L.s;
+      for (let i = 0; i < rows.length; i++) {
+        const ry = listY + i * rowStep;
+        if (i % 2 === 0) {
+          ctx.fillStyle = 'rgba(255,255,255,0.06)';
+          ctx.fillRect(left - 10 * L.s, ry - 20 * L.s, 300 * L.s, 28 * L.s);
+        }
+        ctx.fillStyle = i === 0 ? '#FFD700' : 'rgba(255,255,255,0.6)';
+        ctx.font = 'bold ' + f(15);
+        ctx.fillText((i + 1) + '.', left, ry);
+
+        ctx.fillStyle = i === 0 ? '#FFD700' : 'white';
+        ctx.font = 'bold ' + f(19);
+        ctx.fillText(rows[i].initials, left + 42 * L.s, ry);
+
+        ctx.textAlign = 'right';
+        ctx.fillText(rows[i].score, left + 280 * L.s, ry);
+        ctx.textAlign = 'left';
+      }
+      ctx.textAlign = 'center';
+    }
+
+    drawPill(boardBackRect(), 'Back', '#4FB8EE', '#7FD4FF', '#05304A', 19 * L.s);
+    ctx.textAlign = 'left';
+  }
+
   function draw() {
     const waterLine = waterLineY();
 
@@ -1150,18 +1532,14 @@
       ctx.fillText('Designed and built by 7 year old Vivian,', viewW / 2, creditY);
       ctx.fillText('with some help from AI.', viewW / 2, creditY + creditFont * 1.5);
 
-      // --- HOW TO PLAY button ---
-      const hb = howToButtonRect();
-      const hbHover = pointInRect(pointerX, pointerY, hb);
-      ctx.beginPath(); ctx.roundRect(hb.x, hb.y, hb.w, hb.h, hb.h / 2);
-      ctx.fillStyle = hbHover ? 'rgba(255, 255, 255, 0.28)' : 'rgba(255, 255, 255, 0.14)';
-      ctx.fill();
-      ctx.strokeStyle = 'rgba(255, 255, 255, 0.85)'; ctx.lineWidth = 2.5; ctx.stroke();
-      ctx.fillStyle = 'white';
-      ctx.font = `bold ${Math.min(20, hb.h * 0.4)}px Arial`;
-      ctx.textBaseline = 'middle';
-      ctx.fillText('How to play', viewW / 2, hb.y + hb.h / 2);
-      ctx.textBaseline = 'alphabetic';
+      // --- HOW TO PLAY + HIGH SCORES buttons ---
+      const sb = startButtonRects();
+      const btnFont = Math.min(17, sb.howTo.h * 0.34);
+      drawPill(sb.howTo, 'How to play', 'rgba(255,255,255,0.14)',
+               'rgba(255,255,255,0.28)', 'white', btnFont);
+      drawPill(sb.board, 'High scores', 'rgba(255,255,255,0.14)',
+               'rgba(255,255,255,0.28)', 'white', btnFont);
+      const hb = sb.howTo;
 
       // The prompt sits below the button, measured FROM it, so the two can
       // never overlap on an awkward screen size.
@@ -1234,6 +1612,8 @@
     }
 
     if (gameState === 'HOWTO') drawHowToPage();
+    if (gameState === 'ENTER_INITIALS') drawEnterInitials();
+    if (gameState === 'LEADERBOARD') drawLeaderboard();
 
     // TODO: shop screen — a 'SHOP' gameState drawn here, spending `score`.
   }

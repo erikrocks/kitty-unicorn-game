@@ -236,6 +236,38 @@ time it costs a life.
 
 ---
 
+## The leaderboard
+
+The only network in the project. Supabase REST, called with plain `fetch` — **no Supabase JS
+library**, so the no-dependencies rule holds.
+
+```
+project  kudr-leaderboard      table  public.scores
+columns  id, initials, score, created_at
+RLS      SELECT + INSERT only — no UPDATE or DELETE policy exists
+```
+
+With RLS on, an operation with no policy matches zero rows, so PATCH/DELETE return **204 with
+nothing changed**. That looks like success and isn't — the board can be added to but never
+edited or wiped with the public key. Constraints reject anything but `^[A-Z]{3}$` and a score
+outside 0–1,000,000.
+
+The publishable key sits in the HTML on purpose; that's how Supabase is designed. It lives in
+its own project so it can never reach anything else. **Scores are forgeable** by anyone with
+devtools — unavoidable without accounts, and accepted.
+
+**Every call returns `null`/`false` on any failure rather than throwing.** `loadScores`,
+`submitScore` and `qualifiesForBoard` all swallow errors and time out at 6s. The game must
+survive a dead network mid-frame, so nothing in the loop may ever await or throw.
+
+`qualifiesForBoard` returns **false when offline** — deliberately. Better to never ask for
+initials than to ask and then fail to save them.
+
+Periods are calendar-based, computed client-side in `periodStart()` and passed as a
+`created_at=gte.` filter: month = the 1st, week = Monday. All-time sends no filter.
+
+---
+
 ## Hosting
 
 GitHub Pages from `erikrocks/kitty-unicorn-game`, custom domain `kudr.eriksheridan.com`,

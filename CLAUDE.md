@@ -8,7 +8,10 @@ over big clever ones, and explain what you changed in plain language.
 ## Golden rules (do not break these)
 - Everything lives in ONE self-contained file: `index.html` (HTML + CSS + JS together).
 - No build step, no npm, no frameworks, no external libraries, no separate asset files.
-- Must run by just opening the file in a browser, fully offline.
+- Must run by just opening the file in a browser. **The GAME is fully offline** — the only
+  network call in the project is the high-score board, and every one of those is wrapped so
+  failure is normal: no scores shown, nothing submitted, gameplay untouched. If you add a
+  feature that *requires* the network to play, that's a rule change to discuss first.
 - All art is drawn with canvas 2D (plus a few emoji for scenery). No image files, no sprite
   sheets, no loaded fonts.
 - Works with BOTH touch (tap/hold) and mouse (click/hold), plus Space/Enter on a keyboard.
@@ -61,9 +64,14 @@ while dodging spiky shells. Endless.
 - **Lives (3 to start) and a GAME OVER screen** with the final score and a **Try Again
   button** you have to actually hit — tapping anywhere used to wipe the score before you'd
   read it. Enter still works.
-- **Start screen** with the title, Vivian's credit, a **How to play** button and a blinking
-  prompt. Tapping the button opens the `HOWTO` page; tapping anywhere else still just starts
-  the game.
+- **Start screen** with the title, Vivian's credit, **How to play** and **High scores**
+  buttons side by side, and a blinking prompt. Tapping a button opens that page; tapping
+  anywhere else still just starts the game.
+- **High scores** (`LEADERBOARD` + `ENTER_INITIALS` states), backed by Supabase. Traditional
+  3 initials, with All time / This month / This week tabs. Periods are **calendar** periods
+  (week starts Monday), not rolling windows, so everyone's board resets together. You're only
+  asked for initials if you beat the 10th all-time score — and never if the server is
+  unreachable, so the game can't ask for initials it then fails to save.
 - **How-to-play page** (`HOWTO` state): explains the physics (hold to swim up, and that
   dolphins can't fly so you have to jump), then lists every collectible with its value and
   every hazard. Two things keep it honest: the icons are drawn by calling the game's OWN
@@ -90,6 +98,11 @@ while dodging spiky shells. Endless.
   sideways is only ~375px tall. Shrinking the how-to page to fit drove its text to ~9px, so
   it switches to two columns instead (`howToLayout().wide`). Scaling alone is not a
   responsive strategy when a child has to read the result.
+- **Tap targets need a floor that does NOT scale with the layout.** Scaled pages shrink
+  their buttons along with the text; a Back button at `46 * scale` became 30px in landscape.
+  Text may shrink, touch targets may not — use `Math.max(floor, natural * scale)`. And anchor
+  what follows a floored element to its ACTUAL rect, not to the natural grid, or the floor
+  pushes it into the next thing.
 - **Buttons need a floor of 48px, not 42.** Height-based sizing bottoms out in landscape and
   silently lands under the 44pt minimum tap target.
 - **Test at 375px wide.** Every bug Vivian and Erik have hit was mobile-only and invisible on
@@ -151,6 +164,11 @@ and the apex is no longer a resume — it's a menu linking to this game, EBAAPL 
    (`// TODO:` hooks in `drawHero()` and `draw()`.)
 3. Dolphin upgrades: colors or a horn that affect speed or jump height.
 4. Save progress (points + unlocks) to `localStorage`.
+
+~~High scores~~ — done. Supabase project `kudr-leaderboard`, table `public.scores`, RLS
+allows SELECT and INSERT only (verified: PATCH and DELETE match zero rows). The publishable
+key in `index.html` is meant to be public. **Free-tier Supabase pauses after ~7 days with no
+activity** — if the board stops working, check whether the project needs unpausing.
 
 Dropped: an "underwater section" the dolphin dived into. It was one unexplained line in the
 original roadmap, Vivian never asked for it, and the ocean is only ~300px deep so there was
