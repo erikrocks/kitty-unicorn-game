@@ -268,6 +268,54 @@ Periods are calendar-based, computed client-side in `periodStart()` and passed a
 
 ---
 
+## The app icons
+
+`icon-192.png`, `icon-512.png` and `apple-touch-icon.png` (180px) are **generated from canvas
+2D code**, not hand-drawn, so they stay "art is code" like everything else. To redraw them,
+paste this into the console on the running game, then save each data URL:
+
+```js
+function drawAppIcon(c, S) {
+  const g = c.getContext('2d'), u = S / 512;
+  g.fillStyle = '#0B2F52'; g.fillRect(0, 0, S, S);      // FLAT: a gradient
+  g.save(); g.translate(S/2, S/2); g.scale(u, u);        // made the PNG 143KB
+  g.fillStyle = '#15558F'; g.beginPath(); g.arc(0,0,198,0,Math.PI*2); g.fill();
+  g.fillStyle = '#7CC6F0'; g.beginPath(); g.arc(0,0,150,0,Math.PI*2); g.fill();
+  const bands = [[110,'#FF2D20'],[90,'#FF8A00'],[70,'#FFD400'],[50,'#22B34B'],[30,'#0A63C9']];
+  g.lineWidth = 20; g.lineCap = 'butt';
+  bands.forEach(b => { g.strokeStyle = b[1]; g.beginPath();
+    g.arc(0, 55, b[0], Math.PI, Math.PI*2); g.stroke(); });
+  const rim = ['#FF2D20','#FF8A00','#FFD400','#22B34B','#0A63C9','#A312C4'];
+  g.lineWidth = 17; g.lineCap = 'round';
+  rim.forEach((col, i) => { g.strokeStyle = col; g.beginPath();
+    g.arc(0, 0, 150, -Math.PI/2 + (i/6)*Math.PI*2, -Math.PI/2 + ((i+1)/6)*Math.PI*2);
+    g.stroke(); });
+  g.fillStyle = '#fff';
+  g.beginPath(); g.ellipse(-64, -76, 32, 19, -0.61, 0, Math.PI*2); g.fill();
+  [[-176,-58,16],[174,-32,13],[0,-192,14],[130,160,11]].forEach(p => {
+    const [sx, sy, sz] = p; g.fillStyle = '#fff'; g.beginPath();
+    g.moveTo(sx, sy-sz);
+    g.lineTo(sx+sz*0.33, sy-sz*0.33); g.lineTo(sx+sz, sy);
+    g.lineTo(sx+sz*0.33, sy+sz*0.33); g.lineTo(sx, sy+sz);
+    g.lineTo(sx-sz*0.33, sy+sz*0.33); g.lineTo(sx-sz, sy);
+    g.lineTo(sx-sz*0.33, sy-sz*0.33); g.closePath(); g.fill(); });
+  g.restore();
+}
+const make = S => { const c = document.createElement('canvas');
+  c.width = c.height = S; drawAppIcon(c, S); return c.toDataURL('image/png'); };
+({ 512: make(512), 192: make(192), 180: make(180) });
+```
+
+**Keep the background flat.** A three-stop gradient produced a 143KB 512px PNG; flat colour
+gives 40KB, because smooth gradients make every row unique and defeat PNG's row filters.
+
+Getting the bytes to disk without pushing ~90KB of base64 through a conversation: serve the
+project over `python3 -m http.server`, run a tiny local receiver that base64-decodes POST
+bodies to files, and have the page POST each data URL to it. The page must be on a real
+`http://` origin for that — the preview pane's `data:` URL cannot reach localhost.
+
+---
+
 ## Hosting
 
 GitHub Pages from `erikrocks/kitty-unicorn-game`, custom domain `kudr.eriksheridan.com`,

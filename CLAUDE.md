@@ -148,6 +148,21 @@ before any non-trivial change; this file is the rules, that one is the mechanics
   push items/obstacles in by hand. Set each item's `y` as well as `baseY` — `update()` is
   what normally derives `y`, so a frozen item with only `baseY` renders at `NaN`.
 
+## Installable web app (PWA)
+`manifest.webmanifest` + `icon-192.png` / `icon-512.png` / `apple-touch-icon.png` sit beside
+`index.html`. That's the same layout `erikrocks/bubble` uses, and it's why the one-file rule
+still holds: the rule is about the GAME having no build step or loaded assets, not about the
+repo containing nothing else.
+
+- **No service worker, and none is needed.** Chrome dropped that requirement; bubble installs
+  without one. Don't add one to "fix" installability.
+- **The icons are generated from canvas 2D code**, not hand-drawn files — the same drawing
+  API as the game's art. The generator is recorded in ARCHITECTURE.md so they can be redrawn.
+- **The icon background is flat on purpose.** A gradient pushed the 512px PNG from 40KB to
+  143KB, because smooth gradients defeat PNG compression.
+- iOS status bar is `default`, not `black-translucent`: the top of the screen during play is
+  pale sky blue, and a translucent bar draws its clock in white on top of it.
+
 ## Hosting — DONE, live
 **<https://kudr.eriksheridan.com>** — GitHub Pages from `erikrocks/kitty-unicorn-game`,
 custom domain set, HTTPS enforced, DNS `CNAME kudr → erikrocks.github.io` in place.
