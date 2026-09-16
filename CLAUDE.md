@@ -32,8 +32,15 @@ while dodging spiky shells. Endless.
 - Enter or click starts / restarts the game.
 
 ## What's actually built (all working)
-- **Hand-drawn hero**: gradient dolphin with an animated tail and flipper, ridden by a pink
-  cat with a gradient horn, ears, whiskers and a waving paw. This is the best part of the game.
+- **Hand-drawn hero**: the dolphin (gradient body, animated tail and flipper) ridden by
+  Vivian's redesigned kitten — lavender, chibi proportions, a rainbow mane that drifts, a
+  flower crown, a rainbow-striped horn, closed happy eyes, blushed cheeks and a paw that
+  waves. Everything on the cat is outlined; that dark line is what makes it read as a
+  drawing rather than soft blobs.
+- **DO NOT REDRAW THE DOLPHIN.** It was attempted five times across one session and every
+  version was worse — "closer", then "looks like a shark", then "worse". It already has what
+  matters: a long snout, a rounded body, a friendly eye and a big smile curve. When someone
+  says the hero looks wrong, change the cat. Isolate one animal at a time.
 - **Two-zone physics** with a wavy animated water surface; sky above, ocean below.
 - **Splash system**: 30 particles at each surface crossing.
 - **Web Audio from scratch** — collect, donut, heart, hit and splash sounds, all synthesized
@@ -130,6 +137,10 @@ invariants, spawn tables, collision boxes, and an "if you change X, check Y" tab
 before any non-trivial change; this file is the rules, that one is the mechanics.
 
 ## Working on this file
+- **`index.html` needs its `<meta charset="utf-8">`.** GitHub Pages sends `charset=utf-8` in
+  its headers, which masked the fact that the file never declared one. Serve it from anything
+  else (`python3 -m http.server`, say) and every emoji mangles — the hearts in the lives
+  counter render as `a ¤i`. Don't remove that tag.
 - **The preview pane snapshots `index.html` as a `data:` URL.** `navigate` and
   `location.reload()` will NOT pick up your edits — close the tab and open a fresh preview,
   or you'll screenshot stale art and think a change didn't apply.

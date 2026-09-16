@@ -1,6 +1,10 @@
 <!DOCTYPE html>
 <html>
 <head>
+  <!-- Without this, a server that does not send charset=utf-8 (anything
+       but GitHub Pages, basically) mangles every emoji: the hearts in the
+       lives counter render as "a ¤i". -->
+  <meta charset="utf-8">
   <title>Kitty Unicorn Dolphin Rider</title>
   <!-- This meta tag prevents mobile browsers from zooming in when you tap! -->
   <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
@@ -1097,26 +1101,134 @@
     ctx.beginPath(); ctx.moveTo(45, 25); ctx.quadraticCurveTo(60, 28, 70, 24); ctx.stroke();
     ctx.beginPath(); ctx.moveTo(45, 25); ctx.lineTo(42, 22); ctx.stroke();
 
-    ctx.translate(-5, -20);
-    ctx.strokeStyle = '#FF69B4'; ctx.lineWidth = 8; ctx.lineCap = 'round';
-    ctx.beginPath(); ctx.moveTo(-20, -5); ctx.quadraticCurveTo(-40, -15 - animCycle*5, -35, -25 + animCycle*5); ctx.stroke();
-    ctx.fillStyle = '#FFB6C1'; ctx.beginPath(); ctx.ellipse(-10, -5, 18, 14, 0.2, 0, Math.PI*2); ctx.fill();
-    ctx.fillStyle = '#FF69B4'; ctx.beginPath(); ctx.ellipse(5, 5, 6, 8, -0.5, 0, Math.PI*2); ctx.fill(); ctx.beginPath(); ctx.ellipse(-15, 8, 6, 8, 0.5, 0, Math.PI*2); ctx.fill();
-    ctx.fillStyle = '#FF69B4'; ctx.beginPath(); ctx.ellipse(8, -25, 24, 18, 0, 0, Math.PI * 2); ctx.fill();
+    // --- THE RIDER ---
+    // Vivian's redesign: a lavender chibi kitten with a rainbow mane, a flower
+    // crown, a rainbow horn, closed happy eyes and a paw that waves.
+    // Drawn at 0.7 so the whole hero keeps the footprint it had before.
+    //
+    // The DOLPHIN above is deliberately untouched. Every attempt to redraw it
+    // came out worse than this one -- it went "closer", then "looks like a
+    // shark", then "worse". It already has what matters: a long snout, a
+    // rounded body, a friendly eye and a big smile. Leave it alone.
+    ctx.translate(5, 2);
+    ctx.scale(0.7, 0.7);
 
-    ctx.beginPath(); ctx.moveTo(-10, -35); ctx.lineTo(-15, -55); ctx.lineTo(5, -40); ctx.fill(); ctx.beginPath(); ctx.moveTo(15, -40); ctx.lineTo(30, -55); ctx.lineTo(25, -30); ctx.fill();
-    ctx.fillStyle = '#FFB6C1'; ctx.beginPath(); ctx.moveTo(-8, -38); ctx.lineTo(-12, -48); ctx.lineTo(1, -40); ctx.fill(); ctx.beginPath(); ctx.moveTo(16, -38); ctx.lineTo(25, -48); ctx.lineTo(22, -32); ctx.fill();
+    const OUTLINE = '#4A4670';
+    ctx.lineJoin = 'round';
+    ctx.lineCap = 'round';
 
-    let hornGrad = ctx.createLinearGradient(8, -43, 8, -75); hornGrad.addColorStop(0, 'white'); hornGrad.addColorStop(1, '#FFD700');
-    ctx.fillStyle = hornGrad; ctx.beginPath(); ctx.moveTo(2, -43); ctx.lineTo(8, -75); ctx.lineTo(14, -43); ctx.fill();
-    ctx.strokeStyle = '#DAA520'; ctx.lineWidth = 1.5; ctx.beginPath(); ctx.moveTo(4, -50); ctx.lineTo(12, -48); ctx.stroke(); ctx.beginPath(); ctx.moveTo(5, -58); ctx.lineTo(11, -56); ctx.stroke(); ctx.beginPath(); ctx.moveTo(6, -66); ctx.lineTo(10, -64); ctx.stroke();
+    // Rainbow mane, sweeping back behind her and drifting as she swims.
+    const maneSway = Math.sin(elapsed * 3) * 3;
+    ctx.lineWidth = 12;
+    [['#FF6B6B', -58], ['#FFA94D', -66], ['#FFD93D', -70]].forEach((band, i) => {
+      ctx.strokeStyle = band[0];
+      ctx.beginPath();
+      ctx.moveTo(-18 + i * 7, band[1]);
+      ctx.quadraticCurveTo(-50 + i * 9, -48 + i * 6 + maneSway,
+                           -58 + i * 11, -18 + i * 6 + maneSway);
+      ctx.stroke();
+    });
+    ctx.strokeStyle = OUTLINE;
 
-    ctx.fillStyle = 'black'; ctx.beginPath(); ctx.ellipse(0, -22, 4, 6, 0, 0, Math.PI*2); ctx.fill(); ctx.beginPath(); ctx.ellipse(16, -22, 4, 6, 0, 0, Math.PI*2); ctx.fill();
-    ctx.fillStyle = 'white'; ctx.beginPath(); ctx.arc(1, -24, 1.5, 0, Math.PI*2); ctx.fill(); ctx.beginPath(); ctx.arc(17, -24, 1.5, 0, Math.PI*2); ctx.fill();
+    // Body, chest and front paws.
+    ctx.lineWidth = 3; ctx.fillStyle = '#C9A5E8';
+    ctx.beginPath(); ctx.ellipse(2, -6, 17, 15, 0, 0, Math.PI * 2); ctx.fill(); ctx.stroke();
+    ctx.lineWidth = 2.4; ctx.fillStyle = '#FDFAFF';
+    ctx.beginPath(); ctx.ellipse(6, -4, 9, 10, 0, 0, Math.PI * 2); ctx.fill(); ctx.stroke();
+    ctx.beginPath(); ctx.ellipse(-4, 7, 8, 5.5, 0, 0, Math.PI * 2); ctx.fill(); ctx.stroke();
+    ctx.beginPath(); ctx.ellipse(12, 8, 8, 5.5, 0, 0, Math.PI * 2); ctx.fill(); ctx.stroke();
 
-    ctx.fillStyle = '#FF1493'; ctx.beginPath(); ctx.moveTo(6, -15); ctx.lineTo(10, -15); ctx.lineTo(8, -12); ctx.fill();
-    ctx.strokeStyle = 'black'; ctx.lineWidth = 1.5; ctx.beginPath(); ctx.arc(5.5, -10, 2.5, 0, Math.PI); ctx.stroke(); ctx.beginPath(); ctx.arc(10.5, -10, 2.5, 0, Math.PI); ctx.stroke();
-    ctx.lineWidth = 1; ctx.beginPath(); ctx.moveTo(-6, -16); ctx.lineTo(-18, -18); ctx.stroke(); ctx.beginPath(); ctx.moveTo(-6, -13); ctx.lineTo(-18, -11); ctx.stroke(); ctx.beginPath(); ctx.moveTo(22, -16); ctx.lineTo(34, -18); ctx.stroke(); ctx.beginPath(); ctx.moveTo(22, -13); ctx.lineTo(34, -11); ctx.stroke();
+    // The raised paw actually waves.
+    ctx.save();
+    ctx.translate(16, -22);
+    ctx.rotate(Math.sin(elapsed * 5) * 0.25);
+    ctx.strokeStyle = '#C9A5E8'; ctx.lineWidth = 11;
+    ctx.beginPath(); ctx.moveTo(0, 0); ctx.quadraticCurveTo(14, -10, 22, -22); ctx.stroke();
+    ctx.strokeStyle = OUTLINE; ctx.lineWidth = 2.6;
+    ctx.beginPath(); ctx.moveTo(0, 0); ctx.quadraticCurveTo(14, -10, 22, -22); ctx.stroke();
+    ctx.fillStyle = '#FDFAFF';
+    ctx.beginPath(); ctx.arc(25, -28, 9, 0, Math.PI * 2); ctx.fill(); ctx.stroke();
+    ctx.fillStyle = '#F5A3BE';
+    ctx.beginPath(); ctx.ellipse(25, -31, 3.2, 2.5, 0, 0, Math.PI * 2); ctx.fill();
+    [[21, -26], [25, -24.5], [29, -26]].forEach(pad => {
+      ctx.beginPath(); ctx.arc(pad[0], pad[1], 1.8, 0, Math.PI * 2); ctx.fill();
+    });
+    ctx.restore();
+
+    // Ears.
+    ctx.lineWidth = 3; ctx.fillStyle = '#C9A5E8';
+    ctx.beginPath(); ctx.moveTo(-30, -66);
+    ctx.quadraticCurveTo(-38, -94, -32, -97);
+    ctx.quadraticCurveTo(-19, -86, -9, -80); ctx.closePath(); ctx.fill(); ctx.stroke();
+    ctx.beginPath(); ctx.moveTo(30, -66);
+    ctx.quadraticCurveTo(38, -94, 32, -97);
+    ctx.quadraticCurveTo(19, -86, 9, -80); ctx.closePath(); ctx.fill(); ctx.stroke();
+    ctx.fillStyle = '#F5A3BE';
+    ctx.beginPath(); ctx.moveTo(-28, -68);
+    ctx.quadraticCurveTo(-33, -88, -31, -90);
+    ctx.quadraticCurveTo(-21, -82, -13, -78); ctx.closePath(); ctx.fill();
+    ctx.beginPath(); ctx.moveTo(28, -68);
+    ctx.quadraticCurveTo(33, -88, 31, -90);
+    ctx.quadraticCurveTo(21, -82, 13, -78); ctx.closePath(); ctx.fill();
+
+    // Rainbow horn, built from stacked slices of a cone.
+    ctx.lineWidth = 2.2;
+    [['#B980F0', -86, -95, 7, 5.6], ['#5BA9F0', -95, -104, 5.6, 4.2],
+     ['#6BCB77', -104, -113, 4.2, 2.8]].forEach(sl => {
+      ctx.fillStyle = sl[0];
+      ctx.beginPath();
+      ctx.moveTo(-sl[3], sl[1]); ctx.lineTo(sl[3], sl[1]);
+      ctx.lineTo(sl[4], sl[2]); ctx.lineTo(-sl[4], sl[2]);
+      ctx.closePath(); ctx.fill(); ctx.stroke();
+    });
+    ctx.fillStyle = '#FF6B6B';
+    ctx.beginPath(); ctx.moveTo(-2.8, -113); ctx.lineTo(2.8, -113); ctx.lineTo(0, -126);
+    ctx.closePath(); ctx.fill(); ctx.stroke();
+
+    // Head.
+    ctx.lineWidth = 3; ctx.fillStyle = '#C9A5E8';
+    ctx.beginPath(); ctx.arc(0, -50, 34, 0, Math.PI * 2); ctx.fill(); ctx.stroke();
+
+    // Flower crown.
+    [[-22, -74, '#FF9ECD'], [22, -72, '#FFE066']].forEach(f => {
+      ctx.lineWidth = 2; ctx.fillStyle = f[2];
+      [[0, -4], [3.8, -1.3], [2.4, 3.3], [-2.4, 3.3], [-3.8, -1.3]].forEach(petal => {
+        ctx.beginPath();
+        ctx.arc(f[0] + petal[0], f[1] + petal[1], 3.3, 0, Math.PI * 2);
+        ctx.fill(); ctx.stroke();
+      });
+      ctx.fillStyle = '#FFE066';
+      ctx.beginPath(); ctx.arc(f[0], f[1], 2.3, 0, Math.PI * 2); ctx.fill();
+    });
+
+    // Closed happy eyes. Two upward arcs read as a delighted cat; solid dark
+    // almond shapes read as a sleeping one.
+    ctx.strokeStyle = OUTLINE; ctx.lineWidth = 3.2;
+    ctx.beginPath(); ctx.moveTo(-21, -56); ctx.quadraticCurveTo(-13, -67, -5, -56); ctx.stroke();
+    ctx.beginPath(); ctx.moveTo(5, -56); ctx.quadraticCurveTo(13, -67, 21, -56); ctx.stroke();
+
+    // Blush.
+    ctx.globalAlpha = 0.8; ctx.fillStyle = '#F5A3BE';
+    ctx.beginPath(); ctx.ellipse(-25, -42, 8, 5.5, 0, 0, Math.PI * 2); ctx.fill();
+    ctx.beginPath(); ctx.ellipse(25, -42, 8, 5.5, 0, 0, Math.PI * 2); ctx.fill();
+    ctx.globalAlpha = 1;
+
+    // Muzzle, nose, open smile and tongue.
+    ctx.fillStyle = '#FDFAFF';
+    ctx.beginPath(); ctx.ellipse(-8, -36, 11, 8, 0, 0, Math.PI * 2); ctx.fill();
+    ctx.beginPath(); ctx.ellipse(8, -36, 11, 8, 0, 0, Math.PI * 2); ctx.fill();
+    ctx.fillStyle = '#E8709B';
+    ctx.beginPath(); ctx.moveTo(-3, -42); ctx.lineTo(3, -42); ctx.lineTo(0, -38.5);
+    ctx.closePath(); ctx.fill();
+    ctx.fillStyle = '#7A4A6A'; ctx.lineWidth = 2.6;
+    ctx.beginPath(); ctx.moveTo(-11, -38);
+    ctx.quadraticCurveTo(0, -41, 11, -38);
+    ctx.quadraticCurveTo(10, -22, 0, -22);
+    ctx.quadraticCurveTo(-10, -22, -11, -38);
+    ctx.closePath(); ctx.fill(); ctx.stroke();
+    ctx.fillStyle = '#FF8FB8';
+    ctx.beginPath(); ctx.moveTo(-5, -27); ctx.quadraticCurveTo(0, -21, 5, -27);
+    ctx.quadraticCurveTo(0, -24, -5, -27); ctx.closePath(); ctx.fill();
     ctx.restore();
 
     // TODO: customization shop — swap the pink/blue colours above for the
