@@ -68,6 +68,23 @@ while dodging spiky shells. Endless.
   sand, and `updateSeaweed()` is called from `loop()` rather than `update()` on purpose:
   `update()` stops on the start screen but the floor keeps sliding, and frozen weeds growing
   out of moving sand looks broken.
+- **Difficulty ramps.** The game used to run at one speed forever, so a good run became a
+  marathon. `difficulty()` goes 0 → 1 over `DIFFICULTY_RAMP` (150s) and then **plateaus** —
+  scroll and hazard speed reach `MAX_SPEED_MULT` (1.7x), hazard spawn rate reaches
+  `MAX_HAZARD_MULT` (2x). Tune those three constants to change the whole escalation.
+  `warnDistance()` scales with speed so the red shimmer always gives ~1.7s of warning;
+  without that, the warning shrinks exactly when you need it most.
+- **The seafloor position is ACCUMULATED (`worldScroll`), never `elapsed * SCROLL_SPEED`.**
+  Multiplying total elapsed time by the current speed makes the floor lurch the moment the
+  speed can change. Anything that scrolls must integrate distance, not recompute from `elapsed`.
+- **x2 bonus at 6 hearts** (Vivian's idea): `scoreMultiplier()` doubles gems, donuts and
+  rainbows — not hearts, which still give a life. Shown as a pulsing gold badge next to the
+  hearts, sized from the MEASURED text width. Hearts past `HEART_DISPLAY_MAX` (8) collapse to
+  `❤️ xN` so a long row can't run off a phone screen.
+- **Personal best** in `localStorage` (`kudr.best`), shown on the start and game-over screens.
+  Separate from the online board on purpose — something to beat on every run, not just the
+  ones good enough for the top ten. Reads/writes are wrapped in try/catch because
+  `localStorage` *throws* in some privacy modes rather than returning nothing.
 - **Lives (3 to start) and a GAME OVER screen** with the final score and a **Try Again
   button** you have to actually hit — tapping anywhere used to wipe the score before you'd
   read it. Enter still works.
@@ -110,6 +127,10 @@ while dodging spiky shells. Endless.
   Text may shrink, touch targets may not — use `Math.max(floor, natural * scale)`. And anchor
   what follows a floored element to its ACTUAL rect, not to the natural grid, or the floor
   pushes it into the next thing.
+- **Draw optional text only when it fits.** The game-over "(or press Enter)" hint fell off
+  the bottom on short landscape screens — it now checks `hintY <= viewH - 6` first. That's
+  more robust than another viewport threshold, and a phone held sideways has no keyboard
+  anyway.
 - **Buttons need a floor of 48px, not 42.** Height-based sizing bottoms out in landscape and
   silently lands under the 44pt minimum tap target.
 - **Test at 375px wide.** Every bug Vivian and Erik have hit was mobile-only and invisible on
@@ -189,7 +210,7 @@ and the apex is no longer a resume — it's a menu linking to this game, EBAAPL 
 2. Customization shop: spend points on kitty outfits/colors and dolphin colors.
    (`// TODO:` hooks in `drawHero()` and `draw()`.)
 3. Dolphin upgrades: colors or a horn that affect speed or jump height.
-4. Save progress (points + unlocks) to `localStorage`.
+4. Save progress (unlocks) to `localStorage` — the personal best already lives there.
 
 ~~High scores~~ — done. Supabase project `kudr-leaderboard`, table `public.scores`, RLS
 allows SELECT and INSERT only (verified: PATCH and DELETE match zero rows). The publishable

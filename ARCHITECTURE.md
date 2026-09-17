@@ -136,6 +136,28 @@ Crossing the surface in either direction fires `createSplash()`.
 
 ---
 
+## Difficulty
+
+`runTime` counts seconds in the current run (reset by `handleGameStart`). `difficulty()`
+returns 0 → 1 over `DIFFICULTY_RAMP` seconds, then clamps:
+
+| | at 0s | at 75s | at 150s+ |
+|---|---|---|---|
+| Scroll speed | 300 px/s | 405 | **510** (plateau) |
+| Hazards/min | 21.6 | 32.4 | **43.2** (plateau) |
+| Warning time | 1.67s | 1.67s | 1.67s |
+
+The warning time is constant *by construction*: `warnDistance()` scales with `speedMult()`.
+A fixed 600px would silently shrink the reaction window as the game sped up.
+
+**The trap:** the seafloor used to be positioned with `elapsed * SCROLL_SPEED`. That is only
+correct while the speed is constant — multiplying *total* elapsed time by the *current* speed
+makes the floor jump whenever the speed changes. It now integrates into `worldScroll`, which
+is accumulated in `loop()` (outside `update()`, so it keeps sliding on the start screen).
+Items and seaweed already integrated, so they only needed the ramped speed.
+
+---
+
 ## Spawning
 
 Two independent rolls per frame, each a per-second rate × `dt`:

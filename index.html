@@ -116,6 +116,23 @@
   const SPLASH_GRAVITY = 1800;
   const SPLASH_FADE    = 1.8; // how fast a droplet fades out, per second
 
+  // --- DIFFICULTY RAMP --------------------------------------------------
+  // The game used to run at one speed forever, so a good run became a
+  // marathon rather than a challenge. Everything now ramps from 1x up to the
+  // caps below over DIFFICULTY_RAMP seconds and then PLATEAUS. It has to stay
+  // winnable-feeling for a 7-year-old, so it gets faster, never impossible.
+  // Tune these three numbers to change how the whole game escalates.
+  const DIFFICULTY_RAMP  = 150;  // seconds of play to reach full difficulty
+  const MAX_SPEED_MULT   = 1.7;  // everything scrolls up to 1.7x faster
+  const MAX_HAZARD_MULT  = 2.0;  // twice as many hazards at full difficulty
+
+  // --- HEART BONUS ------------------------------------------------------
+  // Vivian's idea: hold six hearts and everything is worth double. Hearts are
+  // rare (5% of items), so six is an achievement — and it gives you something
+  // to protect just as the game starts speeding up.
+  const DOUBLE_POINTS_AT = 6;
+  const HEART_DISPLAY_MAX = 8;   // beyond this the HUD shows a count, not a row
+
   // Scoring
   const GEM_VALUE     = 10;
   const DONUT_VALUE   = 50;
@@ -197,7 +214,11 @@
     const h = Math.max(56, Math.min(84, viewH * 0.09));
     return {
       x: viewW / 2 - w / 2,
-      y: viewH / 2 + scoreFont * 1.2 + 48,
+      // Room for the personal-best line, but tightened on a short screen: a
+      // sideways phone is only ~375px tall and the "(or press Enter)" hint
+      // below the button was already falling off the bottom before this line
+      // was added.
+      y: viewH / 2 + scoreFont * 1.2 + (viewH < 520 ? 34 : 62),
       w: w,
       h: h
     };
@@ -310,6 +331,14 @@
   let lives = START_LIVES;
   let gameState = 'START';
   let elapsed = 0; // seconds since load — drives all the wobble animations
+  let runTime = 0; // seconds in THIS run — drives the difficulty ramp
+  // Total distance the world has slid left. The seafloor used to be placed
+  // with `elapsed * SCROLL_SPEED`, which breaks the moment the speed can
+  // change: multiplying ALL elapsed time by the CURRENT speed makes the floor
+  // lurch. Accumulating the distance is the only correct way.
+  let worldScroll = 0;
+  let personalBest = 0;
+  let beatBestThisRun = false;
 
   // --- leaderboard state ---
   const board = { all: null, month: null, week: null };   // null = not loaded
@@ -358,7 +387,7 @@
   // growing out of moving sand would look broken.
   function updateSeaweed(dt) {
     for (let i = 0; i < seaweed.length; i++) {
-      seaweed[i].x -= SCROLL_SPEED * dt;
+      seaweed[i].x -= scrollSpeed() * dt;
       if (seaweed[i].x < -70) seaweed[i] = makeSeaweed(viewW + 70 + Math.random() * 140);
     }
   }
@@ -441,6 +470,35 @@
     if (rows.length < LEADERBOARD_SIZE) return true;
     return value > rows[rows.length - 1].score;
   }
+
+  // 0 at the start of a run, 1 once it's as hard as it gets.
+  function difficulty() {
+    return Math.min(1, runTime / DIFFICULTY_RAMP);
+  }
+  function speedMult()  { return 1 + (MAX_SPEED_MULT  - 1) * difficulty(); }
+  function hazardMult() { return 1 + (MAX_HAZARD_MULT - 1) * difficulty(); }
+  function scrollSpeed() { return SCROLL_SPEED * speedMult(); }
+
+  // Everything scrolls faster as the game ramps up, so the warning distance
+  // has to grow with it — otherwise the red shimmer gives you LESS time to
+  // react exactly when you need it most.
+  function warnDistance() { return SHELL_WARN_DISTANCE * speedMult(); }
+
+  function scoreMultiplier() {
+    return lives >= DOUBLE_POINTS_AT ? 2 : 1;
+  }
+
+  // Personal best, stored on this device. Wrapped because localStorage throws
+  // outright in some privacy modes rather than just returning nothing — and a
+  // missing high score must never stop the game running.
+  function loadBest() {
+    try { return parseInt(localStorage.getItem('kudr.best') || '0', 10) || 0; }
+    catch (e) { return 0; }
+  }
+  function saveBest(value) {
+    try { localStorage.setItem('kudr.best', String(value)); } catch (e) {}
+  }
+  personalBest = loadBest();
 
   // Keeps a "keep this fraction of speed every 1/60s" drag feeling the same
   // no matter the frame rate.
@@ -565,6 +623,8 @@
 
   function handleGameStart() {
     score = 0;
+    runTime = 0;              // difficulty starts over
+    beatBestThisRun = false;
     lives = START_LIVES;
     items.length = 0;
     obstacles.length = 0;
@@ -741,7 +801,7 @@
       });
     }
 
-    if (Math.random() < OBSTACLE_SPAWN_RATE * dt) {
+    if (Math.random() < OBSTACLE_SPAWN_RATE * hazardMult() * dt) {
       let r = Math.random();
       let kind = 'shell';
       if (r < URCHIN_CHANCE) kind = 'urchin';
@@ -776,6 +836,7 @@
   function update(dt) {
     if (gameState !== 'PLAYING') return;
 
+    runTime += dt;   // drives difficulty()
     const waterLine = waterLineY();
 
     clouds.forEach(c => {
@@ -816,7 +877,7 @@
 
     // --- Gems, donuts and hearts ---
     for (let i = items.length - 1; i >= 0; i--) {
-      items[i].x -= SCROLL_SPEED * dt;
+      items[i].x -= scrollSpeed() * dt;
       items[i].y = items[i].baseY + Math.sin(elapsed * 3 + items[i].phase) * 10;
 
       if (Math.abs(items[i].x - player.x) < 50 && Math.abs(items[i].y - player.y) < 50) {
@@ -824,10 +885,11 @@
           lives++;
           playHeartSound();
         } else if (items[i].itemType === 'rainbow') {
-          score += RAINBOW_VALUE;
+          score += RAINBOW_VALUE * scoreMultiplier();
           playRainbowSound();
         } else {
-          score += items[i].itemType === 'donut' ? DONUT_VALUE : GEM_VALUE;
+          const base = items[i].itemType === 'donut' ? DONUT_VALUE : GEM_VALUE;
+          score += base * scoreMultiplier();
           playCollectSound(items[i].itemType === 'donut');
         }
         items.splice(i, 1);
@@ -838,7 +900,7 @@
 
     // --- Spiky shells ---
     for (let i = obstacles.length - 1; i >= 0; i--) {
-      obstacles[i].x -= OBSTACLE_SPEED * dt;
+      obstacles[i].x -= OBSTACLE_SPEED * speedMult() * dt;
       const box = OBSTACLE_HITBOX[obstacles[i].kind] || OBSTACLE_HITBOX.shell;
       if (Math.abs(obstacles[i].x - player.x) < box.hw &&
           Math.abs((obstacles[i].y + box.oy) - player.y) < box.hh) {
@@ -853,6 +915,14 @@
           // it, qualifiesForBoard returns false and the player simply never
           // sees the initials screen — no error, no blocked game.
           pendingScore = score;
+          // Personal best lives on this device, separate from the online
+          // board — it's something to beat even on a run that doesn't make
+          // the top ten.
+          if (score > personalBest) {
+            personalBest = score;
+            saveBest(personalBest);
+            beatBestThisRun = true;
+          }
           submitStatus = 'idle';
           initials = ['A', 'A', 'A'];
           initialsSlot = 0;
@@ -1375,6 +1445,14 @@
     ctx.fillText('They flash red before they reach you.', x(P.badX), y(P.w1));
     ctx.fillText('Each one costs a life. You start with ' + START_LIVES + '.', x(P.badX), y(P.w2));
 
+    // The two rules you'd otherwise only discover by accident. Values come
+    // from the constants, same as the item legend above.
+    ctx.fillStyle = '#FFD93D'; ctx.font = 'bold ' + f(13);
+    ctx.fillText('Get ' + DOUBLE_POINTS_AT + ' hearts and everything is worth DOUBLE!',
+                 L.cx, y(P.backY - 26));
+    ctx.fillStyle = '#9FE8FF'; ctx.font = f(12);
+    ctx.fillText('It gets faster the longer you survive.', L.cx, y(P.backY - 9));
+
     // --- back ---
     const b = howToBackRect();
     const hovered = pointInRect(pointerX, pointerY, b);
@@ -1560,7 +1638,7 @@
 
     ctx.font = '25px Arial';
     for (let i = 0; i <= viewW + 200; i += 200) {
-      let scrollX = Math.round(i - (elapsed * SCROLL_SPEED) % 200);
+      let scrollX = Math.round(i - worldScroll % 200);
       ctx.fillText('🦪', scrollX, viewH - 25);
       ctx.fillText('⭐', scrollX + 100, viewH - 10);
     }
@@ -1623,7 +1701,7 @@
         // would pop off the instant the shell slipped past.
         const gap = obs.x - player.x;
         const warn = gap >= 0
-          ? Math.max(0, 1 - gap / SHELL_WARN_DISTANCE)
+          ? Math.max(0, 1 - gap / warnDistance())
           : Math.max(0, 1 + gap / 120);
         drawObstacle(obs.kind, Math.round(obs.x), Math.round(obs.y), warn);
       });
@@ -1635,7 +1713,40 @@
       ctx.fillStyle = 'black';
       ctx.font = `bold ${hudFont}px Arial`;
       ctx.fillText('Money (Gems & Donuts): ' + score, 20, 40 + hudFont);
-      ctx.fillText('Lives: ' + '❤️'.repeat(Math.max(0, lives)), 20, 50 + hudFont * 2.2);
+      // Hearts, but a long row would run off a phone screen once the bonus
+      // starts paying out, so past HEART_DISPLAY_MAX it becomes a count.
+      const shown = Math.max(0, lives);
+      const heartText = shown <= HEART_DISPLAY_MAX
+        ? '❤️'.repeat(shown)
+        : '❤️ x' + shown;
+      const livesY = 50 + hudFont * 2.2;
+      const livesLabel = 'Lives: ' + heartText;
+      ctx.fillText(livesLabel, 20, livesY);
+
+      // x2 badge, right after the hearts, pulsing so you notice you have it.
+      if (scoreMultiplier() > 1) {
+        const badgeX = 20 + ctx.measureText(livesLabel).width + 12;
+        const bh = hudFont * 1.25;
+        // Size the pill from the MEASURED text, not a guessed multiple of the
+        // font size — guessing clipped the final letter.
+        const badgeFont = hudFont * 0.72;
+        ctx.font = `bold ${badgeFont}px Arial`;
+        const bw = ctx.measureText('x2 POINTS').width + badgeFont * 1.4;
+        ctx.save();
+        ctx.globalAlpha = 0.75 + Math.abs(Math.sin(elapsed * 5)) * 0.25;
+        ctx.beginPath();
+        ctx.roundRect(badgeX, livesY - bh * 0.78, bw, bh, bh / 2);
+        ctx.fillStyle = '#FFD93D';
+        ctx.fill();
+        ctx.strokeStyle = '#8A5A00'; ctx.lineWidth = 2; ctx.stroke();
+        ctx.fillStyle = '#5A3B00';
+        ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
+        ctx.fillText('x2 POINTS', badgeX + bw / 2, livesY - bh * 0.78 + bh / 2);
+        ctx.textAlign = 'left'; ctx.textBaseline = 'alphabetic';
+        ctx.restore();
+        ctx.font = `bold ${hudFont}px Arial`;   // restore the HUD font
+        ctx.fillStyle = 'black';
+      }
     }
 
     // --- START SCREEN (RESPONSIVE) ---
@@ -1663,6 +1774,12 @@
       const creditY = titleY + titleFont * 0.85 + creditFont * 1.1;
       ctx.fillText('Designed and built by 7 year old Vivian,', viewW / 2, creditY);
       ctx.fillText('with some help from AI.', viewW / 2, creditY + creditFont * 1.5);
+
+      if (personalBest > 0) {
+        ctx.fillStyle = '#7CFFB2';
+        ctx.font = `bold ${creditFont * 1.15}px Arial`;
+        ctx.fillText('Your best: ' + personalBest, viewW / 2, creditY + creditFont * 3.2);
+      }
 
       // --- HOW TO PLAY + HIGH SCORES buttons ---
       const sb = startButtonRects();
@@ -1701,7 +1818,23 @@
 
       ctx.font = `bold ${scoreFont}px Arial`;
       ctx.fillStyle = '#FFD700';
-      ctx.fillText('Final Score: ' + score, viewW / 2, viewH / 2 + scoreFont * 1.2);
+      const scoreY = viewH / 2 + scoreFont * 1.2;
+      ctx.fillText('Final Score: ' + score, viewW / 2, scoreY);
+
+      // Your own best on this device — something to beat on every run, not
+      // just the ones good enough for the online board.
+      const bestY = gameOverButtonRect().y - scoreFont * 0.34;
+      if (beatBestThisRun) {
+        ctx.fillStyle = '#7CFFB2';
+        ctx.font = `bold ${scoreFont * 0.62}px Arial`;
+        ctx.globalAlpha = 0.6 + Math.abs(Math.sin(elapsed * 6)) * 0.4;
+        ctx.fillText('NEW PERSONAL BEST!', viewW / 2, bestY);
+        ctx.globalAlpha = 1;
+      } else if (personalBest > 0) {
+        ctx.fillStyle = 'rgba(255,255,255,0.75)';
+        ctx.font = `${scoreFont * 0.55}px Arial`;
+        ctx.fillText('Your best: ' + personalBest, viewW / 2, bestY);
+      }
 
       // --- TRY AGAIN BUTTON ---
       // A real target you have to aim at, so you can read your score first.
@@ -1736,9 +1869,15 @@
       ctx.fillText('Try Again', viewW / 2, btn.y + btn.h / 2);
       ctx.textBaseline = 'alphabetic';
 
-      ctx.fillStyle = 'rgba(255, 255, 255, 0.75)';
-      ctx.font = `${Math.max(12, retryFont * 0.62)}px Arial`;
-      ctx.fillText('(or press Enter)', viewW / 2, btn.y + btn.h + retryFont * 1.3);
+      // Only drawn if it actually fits. On a very short landscape screen it
+      // fell off the bottom — and a phone held sideways has no keyboard to
+      // press Enter with anyway, so omitting it there loses nothing.
+      const hintY = btn.y + btn.h + retryFont * 1.3;
+      if (hintY <= viewH - 6) {
+        ctx.fillStyle = 'rgba(255, 255, 255, 0.75)';
+        ctx.font = `${Math.max(12, retryFont * 0.62)}px Arial`;
+        ctx.fillText('(or press Enter)', viewW / 2, hintY);
+      }
 
       ctx.textAlign = 'left';
     }
@@ -1768,6 +1907,7 @@
     elapsed += dt;
 
     ctx.clearRect(0, 0, viewW, viewH);
+    worldScroll += scrollSpeed() * dt; // accumulated, NOT elapsed * speed
     updateSeaweed(dt); // outside update() so it drifts on the start screen too
     if (gameState === 'PLAYING') spawn(dt);
     update(dt);
