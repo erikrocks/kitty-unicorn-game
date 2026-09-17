@@ -339,6 +339,8 @@
   let worldScroll = 0;
   let personalBest = 0;
   let beatBestThisRun = false;
+  let doubleActive = false; // so the fanfare fires on CROSSING into the bonus,
+                            // not on every frame you're sitting in it
 
   // --- leaderboard state ---
   const board = { all: null, month: null, week: null };   // null = not loaded
@@ -488,6 +490,14 @@
     return lives >= DOUBLE_POINTS_AT ? 2 : 1;
   }
 
+  // Call after ANYTHING that changes `lives`. Fires the fanfare the moment you
+  // cross into the bonus, and re-arms once you drop back below it.
+  function checkDoubleBonus() {
+    const on = scoreMultiplier() > 1;
+    if (on && !doubleActive) playDoubleSound();
+    doubleActive = on;
+  }
+
   // Personal best, stored on this device. Wrapped because localStorage throws
   // outright in some privacy modes rather than just returning nothing — and a
   // missing high score must never stop the game running.
@@ -590,6 +600,43 @@
     });
   }
 
+  function playDoubleSound() {
+    if (!audioCtx) return;
+    // A short two-note fanfare in harmony, G+D then C+G, resolving upward.
+    // Deliberately unlike the rainbow's arpeggio: this should read as "you
+    // earned something that lasts", not "you picked something up".
+    const t0 = audioCtx.currentTime;
+    [[0, 392.00, 587.33], [0.12, 523.25, 783.99]].forEach(step => {
+      const when = step[0];
+      [step[1], step[2]].forEach(freq => {
+        let osc = audioCtx.createOscillator();
+        let gain = audioCtx.createGain();
+        osc.connect(gain); gain.connect(audioCtx.destination);
+
+        osc.type = 'square';
+        osc.frequency.setValueAtTime(freq, t0 + when);
+
+        gain.gain.setValueAtTime(0.0001, t0 + when);
+        gain.gain.exponentialRampToValueAtTime(0.13, t0 + when + 0.02);
+        gain.gain.exponentialRampToValueAtTime(0.0001, t0 + when + 0.30);
+
+        osc.start(t0 + when); osc.stop(t0 + when + 0.30);
+      });
+    });
+
+    // A bright sweep on top, so it sparkles rather than just honking.
+    let shine = audioCtx.createOscillator();
+    let shineGain = audioCtx.createGain();
+    shine.connect(shineGain); shineGain.connect(audioCtx.destination);
+    shine.type = 'triangle';
+    shine.frequency.setValueAtTime(1046.5, t0 + 0.22);
+    shine.frequency.exponentialRampToValueAtTime(2093, t0 + 0.42);
+    shineGain.gain.setValueAtTime(0.0001, t0 + 0.22);
+    shineGain.gain.exponentialRampToValueAtTime(0.16, t0 + 0.26);
+    shineGain.gain.exponentialRampToValueAtTime(0.0001, t0 + 0.50);
+    shine.start(t0 + 0.22); shine.stop(t0 + 0.50);
+  }
+
   function playSplashSound() {
     if (!audioCtx) return;
     let bloop = audioCtx.createOscillator();
@@ -625,6 +672,7 @@
     score = 0;
     runTime = 0;              // difficulty starts over
     beatBestThisRun = false;
+    doubleActive = false;
     lives = START_LIVES;
     items.length = 0;
     obstacles.length = 0;
@@ -884,6 +932,7 @@
         if (items[i].itemType === 'heart') {
           lives++;
           playHeartSound();
+          checkDoubleBonus();
         } else if (items[i].itemType === 'rainbow') {
           score += RAINBOW_VALUE * scoreMultiplier();
           playRainbowSound();
@@ -906,6 +955,7 @@
           Math.abs((obstacles[i].y + box.oy) - player.y) < box.hh) {
         playHitSound();
         lives--;
+        checkDoubleBonus();   // losing the bonus re-arms the fanfare
         obstacles.splice(i, 1);
 
         if (lives <= 0) {

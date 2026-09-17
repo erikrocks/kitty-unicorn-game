@@ -43,8 +43,9 @@ while dodging spiky shells. Endless.
   says the hero looks wrong, change the cat. Isolate one animal at a time.
 - **Two-zone physics** with a wavy animated water surface; sky above, ocean below.
 - **Splash system**: 30 particles at each surface crossing.
-- **Web Audio from scratch** — collect, donut, heart, hit and splash sounds, all synthesized
-  in code (no audio files). Unlocked on first tap.
+- **Web Audio from scratch** — collect, donut, heart, hit, splash, the rainbow's rising
+  arpeggio and the x2 fanfare, all synthesized in code (no audio files). Unlocked on first
+  tap. Each one is deliberately a different shape so you can tell them apart by ear.
 - **Collectibles**: gems (10 pts) spawn anywhere; donuts (50 pts), hearts (+1 life) and
   **rainbows (116 pts)** are **air-only**, so the valuable stuff costs you a leap. They bob
   and drift in.
@@ -80,7 +81,9 @@ while dodging spiky shells. Endless.
 - **x2 bonus at 6 hearts** (Vivian's idea): `scoreMultiplier()` doubles gems, donuts and
   rainbows — not hearts, which still give a life. Shown as a pulsing gold badge next to the
   hearts, sized from the MEASURED text width. Hearts past `HEART_DISPLAY_MAX` (8) collapse to
-  `❤️ xN` so a long row can't run off a phone screen.
+  `❤️ xN` so a long row can't run off a phone screen. Crossing into it plays a two-note
+  fanfare, fired from `checkDoubleBonus()` on the **transition** — call that after anything
+  that changes `lives`, or it'll either never fire or fire every frame.
 - **Personal best** in `localStorage` (`kudr.best`), shown on the start and game-over screens.
   Separate from the online board on purpose — something to beat on every run, not just the
   ones good enough for the top ten. Reads/writes are wrapped in try/catch because
