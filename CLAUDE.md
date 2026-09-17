@@ -83,7 +83,9 @@ while dodging spiky shells. Endless.
   hearts, sized from the MEASURED text width. Hearts past `HEART_DISPLAY_MAX` (8) collapse to
   `❤️ xN` so a long row can't run off a phone screen. Crossing into it plays a two-note
   fanfare, fired from `checkDoubleBonus()` on the **transition** — call that after anything
-  that changes `lives`, or it'll either never fire or fire every frame.
+  that changes `lives`, or it'll either never fire or fire every frame. It returns whether it
+  played so the heart pickup can skip its own chime: the fanfare **replaces** the heart sound
+  on the unlocking heart rather than stacking on top of it.
 - **Personal best** in `localStorage` (`kudr.best`), shown on the start and game-over screens.
   Separate from the online board on purpose — something to beat on every run, not just the
   ones good enough for the top ten. Reads/writes are wrapped in try/catch because

@@ -492,10 +492,14 @@
 
   // Call after ANYTHING that changes `lives`. Fires the fanfare the moment you
   // cross into the bonus, and re-arms once you drop back below it.
+  // Returns true if it played, so the caller can skip its own sound rather
+  // than stacking two on the same frame.
   function checkDoubleBonus() {
     const on = scoreMultiplier() > 1;
-    if (on && !doubleActive) playDoubleSound();
+    const justCrossed = on && !doubleActive;
+    if (justCrossed) playDoubleSound();
     doubleActive = on;
+    return justCrossed;
   }
 
   // Personal best, stored on this device. Wrapped because localStorage throws
@@ -931,8 +935,9 @@
       if (Math.abs(items[i].x - player.x) < 50 && Math.abs(items[i].y - player.y) < 50) {
         if (items[i].itemType === 'heart') {
           lives++;
-          playHeartSound();
-          checkDoubleBonus();
+          // The heart that unlocks the bonus plays the fanfare INSTEAD of the
+          // usual chime — the two on top of each other were muddy.
+          if (!checkDoubleBonus()) playHeartSound();
         } else if (items[i].itemType === 'rainbow') {
           score += RAINBOW_VALUE * scoreMultiplier();
           playRainbowSound();
