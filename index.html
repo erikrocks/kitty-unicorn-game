@@ -346,7 +346,7 @@
   const board = { all: null, month: null, week: null };   // null = not loaded
   let boardTab = 'all';
   let boardStatus = 'idle';      // idle | loading | ok | error
-  let initials = ['A', 'A', 'A'];
+  let initials = ['A', 'A', 'A']; // replaced with the saved ones once loadSavedInitials exists
   let initialsSlot = 0;
   let pendingScore = 0;          // the score waiting to be saved
   let submitStatus = 'idle';     // idle | sending | done | error
@@ -513,6 +513,21 @@
     try { localStorage.setItem('kudr.best', String(value)); } catch (e) {}
   }
   personalBest = loadBest();
+  initials = loadSavedInitials();
+
+  // The initials you last put on the board, so you don't have to dial them in
+  // from AAA every time. Validated on the way out of storage: anything that
+  // isn't exactly three capitals is ignored, so a corrupted or hand-edited
+  // value can't put junk in the entry boxes.
+  function loadSavedInitials() {
+    try {
+      const raw = localStorage.getItem('kudr.initials') || '';
+      return /^[A-Z]{3}$/.test(raw) ? raw.split('') : ['A', 'A', 'A'];
+    } catch (e) { return ['A', 'A', 'A']; }
+  }
+  function storeInitials(name) {
+    try { localStorage.setItem('kudr.initials', name); } catch (e) {}
+  }
 
   // Keeps a "keep this fraction of speed every 1/60s" drag feeling the same
   // no matter the frame rate.
@@ -713,6 +728,9 @@
     submitScore(name, pendingScore).then(ok => {
       submitStatus = ok ? 'done' : 'error';
       if (ok) {
+        // Store what actually went on the board, so a name the blocklist
+        // tidied isn't offered back again next time.
+        storeInitials(name);
         board.all = board.month = board.week = null; // force a re-fetch
         openLeaderboard();
       }
@@ -979,7 +997,7 @@
             beatBestThisRun = true;
           }
           submitStatus = 'idle';
-          initials = ['A', 'A', 'A'];
+          initials = loadSavedInitials();  // start from last time, not AAA
           initialsSlot = 0;
           const runScore = score;
           qualifiesForBoard(runScore).then(yes => {

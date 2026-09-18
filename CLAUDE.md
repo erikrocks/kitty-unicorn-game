@@ -101,6 +101,11 @@ while dodging spiky shells. Endless.
   (week starts Monday), not rolling windows, so everyone's board resets together. You're only
   asked for initials if you beat the 10th all-time score — and never if the server is
   unreachable, so the game can't ask for initials it then fails to save.
+  Your initials are remembered in `localStorage` (`kudr.initials`) so the entry screen starts
+  from last time instead of AAA. The stored value is **validated on read** — anything that
+  isn't exactly `^[A-Z]{3}$` falls back to AAA, so a corrupted or hand-edited value can't put
+  junk in the boxes. What gets stored is what actually went on the board, so a name the
+  blocklist tidied isn't offered back.
 - **How-to-play page** (`HOWTO` state): explains the physics (hold to swim up, and that
   dolphins can't fly so you have to jump), then lists every collectible with its value and
   every hazard. Two things keep it honest: the icons are drawn by calling the game's OWN
