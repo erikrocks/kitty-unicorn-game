@@ -117,12 +117,19 @@
   const SPLASH_FADE    = 1.8; // how fast a droplet fades out, per second
 
   // --- DIFFICULTY RAMP --------------------------------------------------
-  // The game used to run at one speed forever, so a good run became a
-  // marathon rather than a challenge. Everything now ramps from 1x up to the
-  // caps below over DIFFICULTY_RAMP seconds and then PLATEAUS. It has to stay
+  // Difficulty ramps on SCORE, not on time. Time-based punished a beginner
+  // for surviving and let a strong player coast; scoring is what actually
+  // measures how well you're doing, so good players get challenged sooner and
+  // a struggling one gets a gentler ride. Everything ramps from 1x to the caps
+  // below by DIFFICULTY_SCORE points, then PLATEAUS — it has to stay
   // winnable-feeling for a 7-year-old, so it gets faster, never impossible.
-  // Tune these three numbers to change how the whole game escalates.
-  const DIFFICULTY_RAMP  = 150;  // seconds of play to reach full difficulty
+  //
+  // At 2000 points: a beginner takes ~320s to get there, an expert with the
+  // x2 bonus ~47s. (The old time ramp was a flat 150s for everyone.)
+  //
+  // Note the x2 bonus now cuts both ways — double points also means you reach
+  // full difficulty twice as fast. That's deliberate.
+  const DIFFICULTY_SCORE = 2000; // points to reach full difficulty
   const MAX_SPEED_MULT   = 1.7;  // everything scrolls up to 1.7x faster
   const MAX_HAZARD_MULT  = 2.0;  // twice as many hazards at full difficulty
 
@@ -231,7 +238,7 @@
   function howToLayout() {
     const wide = viewH < 520 && viewW > 560;
     const natW = wide ? 660 : 330;
-    const natH = wide ? 330 : 480;
+    const natH = wide ? 330 : 520;
     const scale = Math.min(1, (viewH - 30) / natH, (viewW - 30) / natW);
     return { wide: wide, s: scale, cx: viewW / 2, top: (viewH - natH * scale) / 2 };
   }
@@ -239,12 +246,17 @@
   // Where everything sits, in natural units, for each of the two shapes.
   function howToSlots(wide) {
     return wide
+      // Two columns: the bonus lines go under the physics text on the LEFT,
+      // where there's room. Squeezing them above the button collided with the
+      // hazard warnings.
       ? { titleX: -165, titleY: 30, physX: -165, p1: 88, p2: 122, p3: 148,
           goodX: 165, goodY: 30, iconsY: 74, valuesY: 114,
-          badX: 165, badY: 156, hazY: 202, w1: 250, w2: 270, backY: 278 }
+          badX: 165, badY: 156, hazY: 202, w1: 250, w2: 270,
+          bonusX: -165, bonus1: 194, bonus2: 218, backY: 278 }
       : { titleX: 0, titleY: 26, physX: 0, p1: 74, p2: 102, p3: 126,
           goodX: 0, goodY: 170, iconsY: 212, valuesY: 250,
-          badX: 0, badY: 292, hazY: 336, w1: 388, w2: 408, backY: 424 };
+          badX: 0, badY: 292, hazY: 336, w1: 382, w2: 400,
+          bonusX: 0, bonus1: 428, bonus2: 450, backY: 470 };
   }
 
   function howToBackRect() {
@@ -331,7 +343,10 @@
   let lives = START_LIVES;
   let gameState = 'START';
   let elapsed = 0; // seconds since load — drives all the wobble animations
-  let runTime = 0; // seconds in THIS run — drives the difficulty ramp
+  // Difficulty eases toward its score-derived target rather than snapping to
+  // it — a doubled rainbow is 232 points, which would jerk the whole world to
+  // a new speed mid-jump.
+  let difficultyNow = 0;
   // Total distance the world has slid left. The seafloor used to be placed
   // with `elapsed * SCROLL_SPEED`, which breaks the moment the speed can
   // change: multiplying ALL elapsed time by the CURRENT speed makes the floor
@@ -474,9 +489,10 @@
   }
 
   // 0 at the start of a run, 1 once it's as hard as it gets.
-  function difficulty() {
-    return Math.min(1, runTime / DIFFICULTY_RAMP);
+  function difficultyTarget() {
+    return Math.min(1, score / DIFFICULTY_SCORE);
   }
+  function difficulty() { return difficultyNow; }
   function speedMult()  { return 1 + (MAX_SPEED_MULT  - 1) * difficulty(); }
   function hazardMult() { return 1 + (MAX_HAZARD_MULT - 1) * difficulty(); }
   function scrollSpeed() { return SCROLL_SPEED * speedMult(); }
@@ -689,7 +705,7 @@
 
   function handleGameStart() {
     score = 0;
-    runTime = 0;              // difficulty starts over
+    difficultyNow = 0;        // difficulty starts over
     beatBestThisRun = false;
     doubleActive = false;
     lives = START_LIVES;
@@ -906,7 +922,6 @@
   function update(dt) {
     if (gameState !== 'PLAYING') return;
 
-    runTime += dt;   // drives difficulty()
     const waterLine = waterLineY();
 
     clouds.forEach(c => {
@@ -1518,13 +1533,12 @@
     ctx.fillText('They flash red before they reach you.', x(P.badX), y(P.w1));
     ctx.fillText('Each one costs a life. You start with ' + START_LIVES + '.', x(P.badX), y(P.w2));
 
-    // The two rules you'd otherwise only discover by accident. Values come
-    // from the constants, same as the item legend above.
+    // The two rules you'd otherwise only discover by accident. The heart count
+    // comes from the constant, same as the item legend above.
     ctx.fillStyle = '#FFD93D'; ctx.font = 'bold ' + f(13);
-    ctx.fillText('Get ' + DOUBLE_POINTS_AT + ' hearts and everything is worth DOUBLE!',
-                 L.cx, y(P.backY - 26));
+    ctx.fillText(DOUBLE_POINTS_AT + ' hearts = DOUBLE points!', x(P.bonusX), y(P.bonus1));
     ctx.fillStyle = '#9FE8FF'; ctx.font = f(12);
-    ctx.fillText('It gets faster the longer you survive.', L.cx, y(P.backY - 9));
+    ctx.fillText('It gets faster as you score!', x(P.bonusX), y(P.bonus2));
 
     // --- back ---
     const b = howToBackRect();
@@ -1980,6 +1994,12 @@
     elapsed += dt;
 
     ctx.clearRect(0, 0, viewW, viewH);
+    // Ease toward the target. Eased in loop() rather than update() so the
+    // world visibly calms back down on the game-over and start screens
+    // instead of still racing from the last run.
+    const dTarget = gameState === 'PLAYING' ? difficultyTarget() : 0;
+    difficultyNow += (dTarget - difficultyNow) * (1 - Math.pow(0.25, dt));
+
     worldScroll += scrollSpeed() * dt; // accumulated, NOT elapsed * speed
     updateSeaweed(dt); // outside update() so it drifts on the start screen too
     if (gameState === 'PLAYING') spawn(dt);

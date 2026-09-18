@@ -138,14 +138,22 @@ Crossing the surface in either direction fires `createSplash()`.
 
 ## Difficulty
 
-`runTime` counts seconds in the current run (reset by `handleGameStart`). `difficulty()`
-returns 0 → 1 over `DIFFICULTY_RAMP` seconds, then clamps:
+Difficulty tracks **score**, not elapsed time. `difficultyTarget()` is
+`min(1, score / DIFFICULTY_SCORE)` with the target at 2000 points:
 
-| | at 0s | at 75s | at 150s+ |
+| | 0 pts | 1000 pts | 2000 pts+ |
 |---|---|---|---|
 | Scroll speed | 300 px/s | 405 | **510** (plateau) |
 | Hazards/min | 21.6 | 32.4 | **43.2** (plateau) |
 | Warning time | 1.67s | 1.67s | 1.67s |
+
+How long that takes depends entirely on how well you play — about 320s for a beginner, 47s
+for an expert running the x2 bonus. That's the point: a strong player gets challenged sooner.
+
+`difficultyNow` **eases** toward the target rather than tracking it directly. A doubled
+rainbow is 232 points, an 11.6% jump, which would snap the world 24px/s faster mid-flight;
+eased, the largest single-frame change is 0.56px/s. The easing lives in `loop()` with the
+target forced to 0 outside `PLAYING`, so the world calms back down between runs.
 
 The warning time is constant *by construction*: `warnDistance()` scales with `speedMult()`.
 A fixed 600px would silently shrink the reaction window as the game sped up.

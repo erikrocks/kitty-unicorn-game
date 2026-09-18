@@ -69,12 +69,18 @@ while dodging spiky shells. Endless.
   sand, and `updateSeaweed()` is called from `loop()` rather than `update()` on purpose:
   `update()` stops on the start screen but the floor keeps sliding, and frozen weeds growing
   out of moving sand looks broken.
-- **Difficulty ramps.** The game used to run at one speed forever, so a good run became a
-  marathon. `difficulty()` goes 0 → 1 over `DIFFICULTY_RAMP` (150s) and then **plateaus** —
-  scroll and hazard speed reach `MAX_SPEED_MULT` (1.7x), hazard spawn rate reaches
-  `MAX_HAZARD_MULT` (2x). Tune those three constants to change the whole escalation.
+- **Difficulty ramps on SCORE, not time.** `difficultyTarget()` is `score /
+  DIFFICULTY_SCORE` (2000), clamped to 1, then everything scales up to `MAX_SPEED_MULT`
+  (1.7x) and `MAX_HAZARD_MULT` (2x) and **plateaus**. Time-based punished a beginner for
+  surviving and let a strong player coast: at 2000 points a beginner takes ~320s to get
+  there, an expert with the x2 bonus ~47s. The x2 bonus therefore cuts both ways — double
+  points also means double the rate of getting harder. That's deliberate.
   `warnDistance()` scales with speed so the red shimmer always gives ~1.7s of warning;
   without that, the warning shrinks exactly when you need it most.
+- **`difficultyNow` EASES toward the target, it doesn't snap to it.** A doubled rainbow is
+  232 points — jumping straight to the new speed would jerk the world 24px/s mid-flight.
+  The easing is in `loop()`, not `update()`, with the target forced to 0 when you're not
+  playing, so the world visibly calms down on the game-over and start screens.
 - **The seafloor position is ACCUMULATED (`worldScroll`), never `elapsed * SCROLL_SPEED`.**
   Multiplying total elapsed time by the current speed makes the floor lurch the moment the
   speed can change. Anything that scrolls must integrate distance, not recompute from `elapsed`.
