@@ -44,6 +44,23 @@
   const canvas = document.getElementById('gameCanvas');
   const ctx = canvas.getContext('2d');
 
+  // Older browsers (iPadOS 15, Firefox before 112) have no ctx.roundRect, and
+  // without it EVERY screen throws on its first button — the game is a blank
+  // blue page. This stand-in builds the same shape from arcTo, which has been
+  // supported everywhere for over a decade. Browsers that have the real one
+  // keep it.
+  if (!CanvasRenderingContext2D.prototype.roundRect) {
+    CanvasRenderingContext2D.prototype.roundRect = function (x, y, w, h, r) {
+      r = Math.max(0, Math.min(typeof r === 'number' ? r : 0, w / 2, h / 2));
+      this.moveTo(x + r, y);
+      this.arcTo(x + w, y,     x + w, y + h, r);
+      this.arcTo(x + w, y + h, x,     y + h, r);
+      this.arcTo(x,     y + h, x,     y,     r);
+      this.arcTo(x,     y,     x + w, y,     r);
+      this.closePath();
+    };
+  }
+
   // --- TUNING VALUES ---------------------------------------------------
   // Every speed below is "per SECOND", not "per frame". That's what makes
   // the game feel the same on a slow phone and a fast 120Hz laptop.
@@ -354,13 +371,23 @@
   let worldScroll = 0;
   let personalBest = 0;
   let beatBestThisRun = false;
+  // Screens that pop up on their own (game over, and the initials screen a
+  // moment later once the board replies) ignore input for a beat. A kid still
+  // mashing the screen from the last run could otherwise hit Skip on a high
+  // score before ever seeing it.
+  const INPUT_GRACE = 0.6;   // seconds
+  let screenShownAt = -99;
+  function inGrace() { return elapsed - screenShownAt < INPUT_GRACE; }
   let doubleActive = false; // so the fanfare fires on CROSSING into the bonus,
                             // not on every frame you're sitting in it
 
   // --- leaderboard state ---
-  const board = { all: null, month: null, week: null };   // null = not loaded
+  // Per tab: undefined = loading, null = failed, array = loaded. One shared
+  // status used to let a fast "this week" reply mark "all time" as loaded
+  // while it was still in flight, so it wrongly said the board was down.
+  const board = { all: undefined, month: undefined, week: undefined };
+  const boardRequest = { all: 0, month: 0, week: 0 };
   let boardTab = 'all';
-  let boardStatus = 'idle';      // idle | loading | ok | error
   let initials = ['A', 'A', 'A']; // replaced with the saved ones once loadSavedInitials exists
   let initialsSlot = 0;
   let pendingScore = 0;          // the score waiting to be saved
@@ -429,6 +456,20 @@
     return null; // all time
   }
 
+  // AbortSignal.timeout doesn't exist before Safari 16, and calling it threw
+  // inside loadScores — so the leaderboard was silently dead on older iPads.
+  function timeoutSignal(ms) {
+    if (typeof AbortSignal !== 'undefined' && typeof AbortSignal.timeout === 'function') {
+      return AbortSignal.timeout(ms);
+    }
+    if (typeof AbortController === 'function') {
+      const c = new AbortController();
+      setTimeout(() => c.abort(), ms);
+      return c.signal;
+    }
+    return undefined; // no way to time out; the fetch just takes as long as it takes
+  }
+
   function supaHeaders() {
     return { apikey: SUPABASE_KEY, Authorization: 'Bearer ' + SUPABASE_KEY,
              'Content-Type': 'application/json' };
@@ -446,10 +487,17 @@
 
       const res = await fetch(url, {
         headers: supaHeaders(),
-        signal: AbortSignal.timeout(NET_TIMEOUT_MS)
+        signal: timeoutSignal(NET_TIMEOUT_MS)
       });
       if (!res.ok) return null;
-      return await res.json();
+      const data = await res.json();
+      // A 200 with a non-array body made qualifiesForBoard throw at every game
+      // over. And never draw a row we don't understand: junk would render as
+      // the literal text "null" on a child's scoreboard.
+      if (!Array.isArray(data)) return null;
+      return data.filter(r => r && typeof r.initials === 'string' &&
+                              /^[A-Z]{3}$/.test(r.initials) &&
+                              Number.isFinite(r.score) && r.score >= 0);
     } catch (e) {
       return null;
     }
@@ -461,7 +509,7 @@
         method: 'POST',
         headers: supaHeaders(),
         body: JSON.stringify({ initials: name, score: value }),
-        signal: AbortSignal.timeout(NET_TIMEOUT_MS)
+        signal: timeoutSignal(NET_TIMEOUT_MS)
       });
       return res.ok;
     } catch (e) {
@@ -470,10 +518,11 @@
   }
 
   function refreshBoard(period) {
-    boardStatus = 'loading';
+    const id = ++boardRequest[period];
+    board[period] = undefined;                        // loading
     loadScores(period).then(rows => {
-      board[period] = rows;                       // null means "couldn't load"
-      boardStatus = rows === null ? 'error' : 'ok';
+      if (id !== boardRequest[period]) return;        // a newer request won
+      board[period] = rows;                           // array, or null if it failed
     });
   }
 
@@ -522,8 +571,13 @@
   // outright in some privacy modes rather than just returning nothing — and a
   // missing high score must never stop the game running.
   function loadBest() {
-    try { return parseInt(localStorage.getItem('kudr.best') || '0', 10) || 0; }
-    catch (e) { return 0; }
+    try {
+      // Only a plain whole number in the leaderboard's own range is believed.
+      // A hand-edited "-500" made a 0-point run a "new best"; "1e20" made the
+      // best unbeatable.
+      const raw = localStorage.getItem('kudr.best') || '';
+      return /^\d{1,7}$/.test(raw) ? Math.min(parseInt(raw, 10), 1000000) : 0;
+    } catch (e) { return 0; }
   }
   function saveBest(value) {
     try { localStorage.setItem('kudr.best', String(value)); } catch (e) {}
@@ -733,7 +787,9 @@
   function openLeaderboard() {
     gameState = 'LEADERBOARD';
     boardTab = 'all';
-    refreshBoard('all');
+    // Fetch all three up front: tabs switch instantly, and nothing shown can
+    // be stale from an earlier visit.
+    refreshBoard('all'); refreshBoard('month'); refreshBoard('week');
   }
 
   function saveInitials() {
@@ -747,7 +803,6 @@
         // Store what actually went on the board, so a name the blocklist
         // tidied isn't offered back again next time.
         storeInitials(name);
-        board.all = board.month = board.week = null; // force a re-fetch
         openLeaderboard();
       }
     });
@@ -773,6 +828,7 @@
       else if (pointInRect(pointerX, pointerY, sb.board)) openLeaderboard();
       else handleGameStart();
     } else if (gameState === 'ENTER_INITIALS') {
+      if (inGrace()) return;
       for (let i = 0; i < 3; i++) {
         if (pointInRect(pointerX, pointerY, initialsChevronRect(i, true)))  { cycleLetter(i, +1); return; }
         if (pointInRect(pointerX, pointerY, initialsChevronRect(i, false))) { cycleLetter(i, -1); return; }
@@ -784,8 +840,7 @@
       for (let i = 0; i < 3; i++) {
         if (pointInRect(pointerX, pointerY, boardTabRect(i))) {
           boardTab = ['all', 'month', 'week'][i];
-          if (board[boardTab] === null || board[boardTab] === undefined) refreshBoard(boardTab);
-          else boardStatus = 'ok';
+          if (board[boardTab] === null) refreshBoard(boardTab);   // retry a failed tab
           return;
         }
       }
@@ -793,6 +848,7 @@
     } else if (gameState === 'HOWTO') {
       gameState = 'START'; // any tap goes back — nothing to lose by closing it
     } else if (gameState === 'GAMEOVER') {
+      if (inGrace()) return;
       // You have to actually hit the Try Again button. A stray tap anywhere
       // else does nothing, so your score stays on screen until you're ready.
       if (pointInRect(pointerX, pointerY, gameOverButtonRect())) handleGameStart();
@@ -805,11 +861,24 @@
   window.addEventListener('mousedown', handlePointerDown);
   window.addEventListener('mouseup', () => isPressing = false);
   window.addEventListener('touchstart', handlePointerDown, { passive: false });
-  window.addEventListener('touchend', () => isPressing = false);
+  // Only let go when the LAST finger lifts, so a two-finger hold doesn't drop
+  // the moment one finger moves.
+  window.addEventListener('touchend', e => {
+    if (!e.touches || e.touches.length === 0) isPressing = false;
+  });
+  // Without these the dolphin rose forever if the press ended somewhere we
+  // never heard about: an iOS system gesture or notification (touchcancel),
+  // switching apps or tabs mid-hold (blur / hidden).
+  window.addEventListener('touchcancel', () => isPressing = false);
+  window.addEventListener('blur', () => isPressing = false);
+  document.addEventListener('visibilitychange', () => {
+    if (document.hidden) isPressing = false;
+  });
 
   window.addEventListener('keydown', (e) => {
     // --- initials entry has its own keyboard handling ---
     if (gameState === 'ENTER_INITIALS') {
+      if (inGrace()) { e.preventDefault(); return; }
       if (e.key && /^[a-zA-Z]$/.test(e.key)) {
         initials[initialsSlot] = e.key.toUpperCase();
         if (initialsSlot < 2) initialsSlot++;
@@ -832,7 +901,7 @@
         gameState = 'START'; // Enter closes the instructions rather than
                              // launching straight into a game, so you always
                              // land back somewhere you recognise
-      } else if (gameState === 'START' || gameState === 'GAMEOVER') {
+      } else if (gameState === 'START' || (gameState === 'GAMEOVER' && !inGrace())) {
         initAudio();
         handleGameStart();
       }
@@ -1015,11 +1084,16 @@
           initials = loadSavedInitials();  // start from last time, not AAA
           initialsSlot = 0;
           const runScore = score;
+          screenShownAt = elapsed;
           qualifiesForBoard(runScore).then(yes => {
             if (yes && gameState === 'GAMEOVER' && score === runScore) {
               gameState = 'ENTER_INITIALS';
+              screenShownAt = elapsed;
             }
           });
+          // Stop here. Two hazards overlapping you on the same frame used to
+          // drive lives to -1 and run this whole game-over block twice.
+          break;
         }
       } else if (obstacles[i].x < -50) {
         obstacles.splice(i, 1);
@@ -1660,10 +1734,10 @@
     const listY = tabs.y + tabs.h + 30 * L.s;
     const rowStep = 32 * L.s;
 
-    if (boardStatus === 'loading' && !rows) {
+    if (rows === undefined) {
       ctx.fillStyle = 'white'; ctx.font = f(15);
       ctx.fillText('Loading...', L.cx, listY + 30 * L.s);
-    } else if (rows === null || rows === undefined) {
+    } else if (rows === null) {
       ctx.fillStyle = '#FF8A80'; ctx.font = 'bold ' + f(15);
       ctx.fillText("Can't reach the scoreboard", L.cx, listY + 20 * L.s);
       ctx.fillStyle = '#FF8A80'; ctx.font = f(12.5);

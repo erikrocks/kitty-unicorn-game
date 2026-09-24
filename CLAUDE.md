@@ -154,6 +154,31 @@ while dodging spiky shells. Endless.
   of missing water caused by a loop that stepped in 20px jumps (1280 divides by 20; 375
   doesn't). Check a phone width before calling any visual change done.
 
+## Compatibility and robustness (from the Sep 2026 QA pass — don't regress these)
+- **Older iPads matter** — a 7-year-old is exactly who gets the hand-me-down on iPadOS 15.
+  Before using any canvas or web API newer than ~2021, check it exists there or add a fallback.
+  - `ctx.roundRect` doesn't exist before Safari 16 / Firefox 112. Without the stand-in at the
+    top of SETUP, **every screen crashed** on its first button — a blank blue page.
+  - `AbortSignal.timeout` doesn't exist before Safari 16; it threw inside `loadScores`, so the
+    leaderboard was silently dead. Always go through `timeoutSignal()`.
+- **A press must always be able to end.** `touchcancel` (iOS gestures, notifications), window
+  `blur` and `visibilitychange` all release `isPressing`; without them the dolphin rose
+  forever. `touchend` only releases when the LAST finger lifts.
+- **The game-over block runs once.** It `break`s out of the obstacle loop — two hazards
+  overlapping on one frame used to take `lives` to -1 and end the run twice.
+- **Screens that appear on their own ignore input for `INPUT_GRACE` (0.6s).** Game over, and
+  the initials screen a moment later, would otherwise let a kid still mashing from the last run
+  hit Skip on a high score they never saw.
+- **Nothing from storage or the network is trusted.** `loadBest()` accepts only `^\d{1,7}$`
+  (a hand-edited `-500` made a 0-point run a "new best"). `loadScores()` returns null for any
+  non-array body and filters out malformed rows.
+- **Leaderboard tabs have per-tab state**: `board[period]` is `undefined` while loading, `null`
+  if it failed, an array when loaded, and superseded responses are discarded via
+  `boardRequest`. One shared status let a fast "this week" reply mark "all time" as loaded
+  while it was still in flight, so it wrongly claimed the board was down.
+- **Testing trap:** when you stub a game function in the console (`spawn = () => {}`), reload
+  before the next test. A leftover stub made a whole fuzzer run meaningless.
+
 ## Code style
 - Code is organized into labeled sections: SETUP, INPUT, UPDATE, DRAW, MAIN LOOP.
 - Animate with `requestAnimationFrame`. **All movement is frame-rate independent**: every
@@ -231,7 +256,9 @@ and the apex is no longer a resume — it's a menu linking to this game, EBAAPL 
 ~~High scores~~ — done. Supabase project `kudr-leaderboard`, table `public.scores`, RLS
 allows SELECT and INSERT only (verified: PATCH and DELETE match zero rows). The publishable
 key in `index.html` is meant to be public. **Free-tier Supabase pauses after ~7 days with no
-activity** — if the board stops working, check whether the project needs unpausing.
+activity** — and it DID, around 2026-09-24. The symptom is that the project hostname stops
+resolving entirely (NXDOMAIN), not an HTTP error. Fix: Restore the project in the Supabase
+dashboard. The game degrades correctly while it's down: no board, no initials prompt, no crash.
 
 Dropped: an "underwater section" the dolphin dived into. It was one unexplained line in the
 original roadmap, Vivian never asked for it, and the ocean is only ~300px deep so there was
