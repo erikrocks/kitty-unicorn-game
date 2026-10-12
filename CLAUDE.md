@@ -102,6 +102,11 @@ while dodging spiky shells. Endless.
 - **Start screen** with the title, Vivian's credit, **How to play** and **High scores**
   buttons side by side, and a blinking prompt. Tapping a button opens that page; tapping
   anywhere else still just starts the game.
+- **Pause menu** (`PAUSED` state): a pause button top-right during play (also Escape / P,
+  and automatic when you switch apps), with Resume, How to play and High scores — so the
+  board is reachable mid-run, not only after earning a place on it. Those pages go Back to
+  the paused run; the world is frozen until you resume. Only the buttons respond, so a
+  stray tap can't drop a kid back into the ocean.
 - **High scores** (`LEADERBOARD` + `ENTER_INITIALS` states), backed by Supabase. Traditional
   3 initials, with All time / This month / This week tabs. Periods are **calendar** periods
   (week starts Monday), not rolling windows, so everyone's board resets together. You're only

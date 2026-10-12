@@ -78,6 +78,17 @@ Four, held in `gameState`:
 
 `update()` and `spawn()` no-op outside PLAYING. `draw()` always runs.
 
+- **`PAUSED`** — the pause menu (Resume / How to play / High scores) over the frozen run.
+  Reached from the pause button (top right, `pauseButtonRect()`), Escape or P, and
+  automatically on `blur` / hidden tab. Escape, P or Enter resume.
+
+**`runPaused` is the important bit.** It stays true while you're on the how-to or high
+score page *opened from the pause menu*, and two things read it: `closeMenuPage()` sends
+Back to PAUSED instead of START, and `loop()` skips the world scroll, seaweed and difficulty
+easing so the run resumes exactly where it stopped. (Without that, difficulty would ease
+toward 0 the moment gameState left PLAYING — the same easing that calms the start screen.)
+Any new page reachable from the pause menu should close through `closeMenuPage()`.
+
 ---
 
 ## Draw order — and why it's load-bearing
@@ -372,6 +383,7 @@ it to the file gives a false mismatch. Diff files, not captured strings.
 | Underwater art | Judge it *through* the water layer, not in isolation |
 | A button's position or size | It's one function used by both drawing and hit-testing — don't split them |
 | A score constant | Nothing: the how-to page reads it. That's the point |
+| A new HUD element in the top right | The pause button lives there (`pauseButtonRect()`) |
 | Any visual change at all | A 375px-wide viewport, and landscape. Every bug found so far was mobile-only |
 
 ## Where the bodies are buried
