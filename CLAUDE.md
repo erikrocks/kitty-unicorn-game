@@ -264,6 +264,11 @@ key in `index.html` is meant to be public. **Free-tier Supabase pauses after ~7 
 activity** — and it DID, around 2026-09-24. The symptom is that the project hostname stops
 resolving entirely (NXDOMAIN), not an HTTP error. Fix: Restore the project in the Supabase
 dashboard. The game degrades correctly while it's down: no board, no initials prompt, no crash.
+**Kept awake since Oct 2026** by a daily GitHub Action in `erikrocks/bubble`
+(`.github/workflows/keep-leaderboard-awake.yml`). Bubble's board lives in this SAME Supabase
+project (table `bubble_scores`), and the job reads one row from both `bubble_scores` and
+`scores`. Nothing to add here. A red run means the project already paused (restore it in
+the dashboard); GitHub disables scheduled workflows after 60 days without commits to bubble.
 
 Dropped: an "underwater section" the dolphin dived into. It was one unexplained line in the
 original roadmap, Vivian never asked for it, and the ocean is only ~300px deep so there was
