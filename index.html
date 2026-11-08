@@ -112,6 +112,14 @@
   };
   const FLOOR_HEIGHT   = 60;  // height of the sandy seafloor
 
+  // On a phone held sideways the screen is only ~360-440 tall, and at full
+  // size the dolphin and the treasures filled too much of it to see what was
+  // coming. So the hero, items and hazards (and their hit boxes) shrink on
+  // short screens: full size at SPRITE_FULL_H tall, never below SPRITE_MIN.
+  // Text and buttons don't shrink — see spriteScale().
+  const SPRITE_FULL_H = 520;
+  const SPRITE_MIN    = 0.7;
+
   // Spawning (chances PER SECOND)
   const ITEM_SPAWN_RATE     = 1.2;
   const OBSTACLE_SPAWN_RATE = 0.36;
@@ -227,6 +235,23 @@
   // what's coming. The app versions lock the screen sideways; in a browser we
   // can't, so we show a "turn it sideways" screen instead (drawRotatePrompt).
   function isPortrait() { return viewH > viewW; }
+
+  // How big the dolphin, items and hazards are drawn (1 = original size).
+  function spriteScale() {
+    return Math.max(SPRITE_MIN, Math.min(1, viewH / SPRITE_FULL_H));
+  }
+  // Draw one in-world sprite at (x, y), shrunk by spriteScale(). The sprite
+  // functions draw around whatever point they're given, so we move the origin
+  // to (x, y), scale, and ask them to draw at (0, 0). The how-to page calls the
+  // same functions WITHOUT this, so its icons stay full size.
+  function drawSprite(x, y, drawFn) {
+    const k = spriteScale();
+    ctx.save();
+    ctx.translate(x, y);
+    ctx.scale(k, k);
+    drawFn(0, 0);
+    ctx.restore();
+  }
 
   // Where the surface of the water sits.
   function waterLineY() {
@@ -1124,7 +1149,8 @@
       items[i].x -= scrollSpeed() * dt;
       items[i].y = items[i].baseY + Math.sin(elapsed * 3 + items[i].phase) * 10;
 
-      if (Math.abs(items[i].x - player.x) < 50 && Math.abs(items[i].y - player.y) < 50) {
+      const reach = 50 * spriteScale();   // smaller sprites, smaller pickup range
+      if (Math.abs(items[i].x - player.x) < reach && Math.abs(items[i].y - player.y) < reach) {
         if (items[i].itemType === 'heart') {
           lives++;
           // The heart that unlocks the bonus plays the fanfare INSTEAD of the
@@ -1148,8 +1174,9 @@
     for (let i = obstacles.length - 1; i >= 0; i--) {
       obstacles[i].x -= OBSTACLE_SPEED * speedMult() * dt;
       const box = OBSTACLE_HITBOX[obstacles[i].kind] || OBSTACLE_HITBOX.shell;
-      if (Math.abs(obstacles[i].x - player.x) < box.hw &&
-          Math.abs((obstacles[i].y + box.oy) - player.y) < box.hh) {
+      const k = spriteScale();   // hit boxes shrink with the art
+      if (Math.abs(obstacles[i].x - player.x) < box.hw * k &&
+          Math.abs((obstacles[i].y + box.oy * k) - player.y) < box.hh * k) {
         playHitSound();
         lives--;
         checkDoubleBonus();   // losing the bonus re-arms the fanfare
@@ -1974,13 +2001,14 @@
     // HERO (drawn before the water so the translucent water tints it when
     // the dolphin is submerged — that's what makes diving look right)
     if (gameState === 'PLAYING' || gameState === 'PAUSED') {
-      drawHero(player.x, player.y, player.dy, player.y >= waterLine);
+      const inWater = player.y >= waterLine;
+      drawSprite(player.x, player.y, (x, y) => drawHero(x, y, player.dy, inWater));
     } else if (gameState === 'START') {
       // Deliberately NOT drawn on the how-to page: she bobs at the centre of
       // the screen, which is exactly where the icon legend sits.
       let bobY = waterLine + Math.sin(elapsed * 3) * 10;
       // The bob's actual up/down speed, so the idle tilt matches the motion.
-      drawHero(viewW / 2, bobY, Math.cos(elapsed * 3) * 30, true);
+      drawSprite(viewW / 2, bobY, (x, y) => drawHero(x, y, Math.cos(elapsed * 3) * 30, true));
     }
 
     // WATER
@@ -2012,11 +2040,9 @@
 
     // ITEMS & OBSTACLES (still shown, frozen, behind the pause menu)
     if (gameState === 'PLAYING' || gameState === 'PAUSED') {
+      const itemArt = { rainbow: drawRainbow, donut: drawDonut, heart: drawHeart, gem: drawGem };
       items.forEach(item => {
-        if (item.itemType === 'rainbow') drawRainbow(Math.round(item.x), Math.round(item.y));
-        else if (item.itemType === 'donut') drawDonut(Math.round(item.x), Math.round(item.y));
-        else if (item.itemType === 'heart') drawHeart(Math.round(item.x), Math.round(item.y));
-        else drawGem(Math.round(item.x), Math.round(item.y));
+        drawSprite(Math.round(item.x), Math.round(item.y), itemArt[item.itemType] || drawGem);
       });
 
       obstacles.forEach(obs => {
@@ -2027,7 +2053,7 @@
         const warn = gap >= 0
           ? Math.max(0, 1 - gap / warnDistance())
           : Math.max(0, 1 + gap / 120);
-        drawObstacle(obs.kind, Math.round(obs.x), Math.round(obs.y), warn);
+        drawSprite(Math.round(obs.x), Math.round(obs.y), (x, y) => drawObstacle(obs.kind, x, y, warn));
       });
     }
 

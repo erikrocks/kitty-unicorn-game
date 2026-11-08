@@ -137,6 +137,12 @@ while dodging spiky shells. Endless.
   huge empty ocean; now it plays like a big phone. `viewW`/`viewH` are in zoomed units, and
   pointer positions are divided by `zoom` — anything new that reads raw screen pixels
   (`clientX`, `innerWidth`) must do the same.
+- **Sprites shrink on short screens** (`spriteScale()`, `drawSprite()`): on a phone held
+  sideways the dolphin and items filled too much of the ~400px-tall screen (Erik, Nov
+  2026). The hero, items and hazards draw at `viewH / SPRITE_FULL_H` (520), between
+  `SPRITE_MIN` (0.7) and 1 — about 0.77 on an iPhone Pro. Their pickup range and hit boxes
+  scale by the same factor, so what you see is what hits you. Text, buttons and the how-to
+  icons don't shrink. Any new in-world sprite should be drawn through `drawSprite()`.
 - **The dolphin's x position is responsive** (`playerHomeX()`): a quarter of the screen
   width, capped at 200px, floored at 90px. On a phone a fixed 200px was over half the screen
   and you couldn't see what was coming.
