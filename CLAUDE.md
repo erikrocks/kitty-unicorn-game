@@ -127,6 +127,16 @@ while dodging spiky shells. Endless.
   the first time it costs a life. The hero is deliberately NOT drawn behind this page — she
   bobs at screen centre, right where the icon legend sits.
 - Clouds, a scrolling sandy seafloor, and a responsive HUD that scales to the screen.
+- **Landscape only** (Erik's call, Nov 2026: upright, a phone is too narrow to see what's
+  coming). The native apps lock the orientation; the website can't, so when the screen is
+  taller than wide it shows a "Turn your phone sideways" page (`isPortrait()`,
+  `drawRotatePrompt()`), ignores input, and pauses a run in progress. The portrait layouts
+  in the page code still exist and still work — they're just not reachable on a phone.
+- **Big screens zoom the whole game** (`zoom` in `resizeCanvas()`): short side ÷ 440,
+  between 1 and 2. Phones are exactly 1. An iPad used to draw everything at phone size in a
+  huge empty ocean; now it plays like a big phone. `viewW`/`viewH` are in zoomed units, and
+  pointer positions are divided by `zoom` — anything new that reads raw screen pixels
+  (`clientX`, `innerWidth`) must do the same.
 - **The dolphin's x position is responsive** (`playerHomeX()`): a quarter of the screen
   width, capped at 200px, floored at 90px. On a phone a fixed 200px was over half the screen
   and you couldn't see what was coming.
@@ -154,10 +164,12 @@ while dodging spiky shells. Endless.
   anyway.
 - **Buttons need a floor of 48px, not 42.** Height-based sizing bottoms out in landscape and
   silently lands under the 44pt minimum tap target.
-- **Test at 375px wide.** Every bug Vivian and Erik have hit was mobile-only and invisible on
-  a desktop viewport — the dolphin sitting too far right, the game-over misfire, and a wedge
-  of missing water caused by a loop that stepped in 20px jumps (1280 divides by 20; 375
-  doesn't). Check a phone width before calling any visual change done.
+- **Test on phone-sized LANDSCAPE screens, and an iPad.** Every bug Vivian and Erik have hit
+  was mobile-only and invisible on a desktop viewport — the dolphin sitting too far right,
+  the game-over misfire, and a wedge of missing water caused by a loop that stepped in 20px
+  jumps. Check at least 667x375 (small iPhone), 800x360 (small Android), 874x402 (iPhone
+  Pro) and 1376x1032 (13" iPad) before calling a visual change done. Touch targets floor at
+  44 (Apple's minimum) for small controls and 48 for buttons.
 
 ## Compatibility and robustness (from the Sep 2026 QA pass — don't regress these)
 - **Older iPads matter** — a 7-year-old is exactly who gets the hand-me-down on iPadOS 15.
