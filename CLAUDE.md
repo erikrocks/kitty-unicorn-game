@@ -132,11 +132,16 @@ while dodging spiky shells. Endless.
   taller than wide it shows a "Turn your phone sideways" page (`isPortrait()`,
   `drawRotatePrompt()`), ignores input, and pauses a run in progress. The portrait layouts
   in the page code still exist and still work — they're just not reachable on a phone.
-- **Big screens zoom the whole game** (`zoom` in `resizeCanvas()`): short side ÷ 440,
-  between 1 and 2. Phones are exactly 1. An iPad used to draw everything at phone size in a
-  huge empty ocean; now it plays like a big phone. `viewW`/`viewH` are in zoomed units, and
-  pointer positions are divided by `zoom` — anything new that reads raw screen pixels
-  (`clientX`, `innerWidth`) must do the same.
+- **One zoom for the whole game** (`zoom` in `resizeCanvas()`): every screen shows the same
+  amount of ocean, `GAME_HEIGHT` (540) game units tall, and everything — world, dolphin,
+  text, HUD — is zoomed to fit. A phone held sideways zooms DOWN to ~0.7-0.8 (at 1:1 it
+  "looks like you're swimming in a puddle", Erik, Nov 2026); an iPad zooms UP to ~1.4-1.9
+  (at 1:1 it was a tiny dolphin in a huge ocean). Two things must NOT shrink with it:
+  touch-target floors are in real pixels (`realPx(48)`), and the how-to / high score /
+  initials pages may grow back to readable size (`pageMaxScale()`). Pointer positions are
+  divided by `zoom`; anything new that reads raw screen pixels (`clientX`, `innerWidth`)
+  must do the same. Shrinking only the sprites was tried first and was the wrong fix —
+  the complaint was the whole scene, not the dolphin.
 - **The dolphin's x position is responsive** (`playerHomeX()`): a quarter of the screen
   width, capped at 200px, floored at 90px. On a phone a fixed 200px was over half the screen
   and you couldn't see what was coming.

@@ -194,21 +194,33 @@
   // drawing context to match so we can keep thinking in normal pixels.
   let viewW = 0;
   let viewH = 0;
-  // How much bigger than 1:1 everything is drawn. The game was designed and
-  // tuned on phones, whose short side is 375-440px. On an iPad (short side
-  // 744-1032px) it drew at phone size in a huge empty ocean: a tiny dolphin,
-  // tiny pages floating in the middle. So on bigger screens the WHOLE game
-  // zooms up, up to 2x, and an iPad plays like a big phone. Phones stay at
-  // exactly 1. viewW/viewH are in these zoomed units, so nothing else in the
-  // game needs to know.
-  const ZOOM_BASE = 440;   // short side at or under this = no zoom (phones)
+  // How big everything is drawn. Every screen shows the same amount of ocean:
+  // GAME_HEIGHT game units from top to bottom (on a landscape screen). The
+  // whole game — world, dolphin, text — is then zoomed to fit:
+  //   - a phone held sideways (~360-440 tall) zooms DOWN to ~0.7-0.8. At 1:1
+  //     everything was too big: "looks like you're swimming in a puddle".
+  //   - an iPad (~744-1032 tall) zooms UP. At 1:1 it was a tiny dolphin in a
+  //     huge ocean, with the pages floating small in the middle.
+  // viewW/viewH are in these zoomed units, so the game code doesn't need to
+  // know. Two exceptions: touch targets (realPx) and the full-screen pages
+  // (pageMaxScale) must not shrink with it.
+  const GAME_HEIGHT = 540;
+  const ZOOM_MIN = 0.6;
   const ZOOM_MAX = 2;
   let zoom = 1;
+
+  // A size in REAL screen pixels, converted to game units. Used for touch
+  // target floors: a finger doesn't get smaller because the game zoomed out.
+  function realPx(px) { return px / zoom; }
+  // The how-to, high score and initials pages may grow up to this much, so
+  // that zooming out on a phone doesn't shrink their text below what a
+  // 7-year-old can read. (They never grow past what fits on screen.)
+  function pageMaxScale() { return Math.max(1, 1 / zoom); }
 
   function resizeCanvas() {
     const dpr = window.devicePixelRatio || 1;
     const cssW = window.innerWidth, cssH = window.innerHeight;
-    zoom = Math.max(1, Math.min(ZOOM_MAX, Math.min(cssW, cssH) / ZOOM_BASE));
+    zoom = Math.max(ZOOM_MIN, Math.min(ZOOM_MAX, Math.min(cssW, cssH) / GAME_HEIGHT));
     viewW = cssW / zoom;
     viewH = cssH / zoom;
 
@@ -252,7 +264,7 @@
   function gameOverButtonRect() {
     const scoreFont = Math.min(40, viewW * 0.07);
     const w = Math.max(200, Math.min(340, viewW * 0.5));
-    const h = Math.max(56, Math.min(84, viewH * 0.09));
+    const h = Math.max(realPx(56), Math.min(84, viewH * 0.09));
     return {
       x: viewW / 2 - w / 2,
       // Room for the personal-best line, but tightened on a short screen: a
@@ -270,10 +282,12 @@
   // height, so it switches to TWO COLUMNS there — shrinking a single column to
   // fit 375px of height drove the text down to ~9px, which a child can't read.
   function howToLayout() {
-    const wide = viewH < 520 && viewW > 560;
+    // Two columns whenever the screen is wider than tall enough for them —
+    // judged by shape, not by a fixed height, so it holds at any zoom.
+    const wide = viewW >= viewH * 1.25;
     const natW = wide ? 660 : 330;
     const natH = wide ? 330 : 520;
-    const scale = Math.min(1, (viewH - 30) / natH, (viewW - 30) / natW);
+    const scale = Math.min(pageMaxScale(), (viewH - 30) / natH, (viewW - 30) / natW);
     return { wide: wide, s: scale, cx: viewW / 2, top: (viewH - natH * scale) / 2 };
   }
 
@@ -296,7 +310,7 @@
   function howToBackRect() {
     const L = howToLayout();
     // Floored like every other button — unfloored it shrank to 40px on short screens.
-    const w = Math.max(130, 150 * L.s), h = Math.max(48, 46 * L.s);
+    const w = Math.max(130, 150 * L.s), h = Math.max(realPx(48), 46 * L.s);
     return { x: L.cx - w / 2, y: L.top + howToSlots(L.wide).backY * L.s, w: w, h: h };
   }
 
@@ -306,7 +320,7 @@
     const gap = 12;
     const total = Math.max(300, Math.min(420, viewW * 0.86));
     const w = (total - gap) / 2;
-    const h = Math.max(48, Math.min(58, viewH * 0.062));
+    const h = Math.max(realPx(48), Math.min(58, viewH * 0.062));
     const y = viewH / 2 + 24;
     return {
       howTo: { x: viewW / 2 - total / 2, y: y, w: w, h: h },
@@ -316,7 +330,7 @@
 
   // --- initials entry ---
   function initialsLayout() {
-    const s = Math.min(1, (viewH - 40) / 420, (viewW - 30) / 320);
+    const s = Math.min(pageMaxScale(), (viewH - 40) / 420, (viewW - 30) / 320);
     return { s: s, cx: viewW / 2, top: (viewH - 420 * s) / 2 };
   }
   function initialsSlotRect(i) {
@@ -328,7 +342,7 @@
   function initialsChevronRect(i, up) {
     const slot = initialsSlotRect(i);
     const L = initialsLayout();
-    const h = Math.max(44, 42 * L.s);   // floored at Apple's 44pt minimum: still tappable when scaled
+    const h = Math.max(realPx(44), 42 * L.s);   // floored at Apple's 44pt minimum: still tappable when scaled
     return { x: slot.x, y: up ? slot.y - h - 6 * L.s : slot.y + slot.h + 6 * L.s,
              w: slot.w, h: h };
   }
@@ -337,7 +351,7 @@
   // buttons plus their gap overflowed the bottom of a landscape phone.
   function initialsButtonRow() {
     const L = initialsLayout();
-    const h = Math.max(48, 52 * L.s);
+    const h = Math.max(realPx(48), 52 * L.s);
     const saveW = Math.max(130, 170 * L.s);
     const skipW = Math.max(96, 120 * L.s);
     const gap = 14 * L.s;
@@ -353,18 +367,18 @@
 
   // --- leaderboard ---
   function boardLayout() {
-    const s = Math.min(1, (viewH - 30) / 520, (viewW - 24) / 340);
+    const s = Math.min(pageMaxScale(), (viewH - 30) / 520, (viewW - 24) / 340);
     return { s: s, cx: viewW / 2, top: (viewH - 520 * s) / 2 };
   }
   function boardTabRect(i) {
     const L = boardLayout();
-    const w = 104 * L.s, h = Math.max(44, 38 * L.s), gap = 6 * L.s;  // 44 = Apple's minimum touch size
+    const w = 104 * L.s, h = Math.max(realPx(44), 38 * L.s), gap = 6 * L.s;  // 44 = Apple's minimum touch size
     const total = w * 3 + gap * 2;
     return { x: L.cx - total / 2 + i * (w + gap), y: L.top + 58 * L.s, w: w, h: h };
   }
   function boardBackRect() {
     const L = boardLayout();
-    const w = Math.max(130, 150 * L.s), h = Math.max(46, 46 * L.s);
+    const w = Math.max(130, 150 * L.s), h = Math.max(realPx(48), 46 * L.s);
     return { x: L.cx - w / 2, y: L.top + 462 * L.s, w: w, h: h };
   }
 
@@ -376,14 +390,14 @@
   // Top-right corner while playing. Floored at 48px like every other button:
   // it's a small icon, so it's the one most likely to shrink below a finger.
   function pauseButtonRect() {
-    const s = Math.max(48, Math.min(60, viewW * 0.06));
+    const s = Math.max(realPx(48), Math.min(60, viewW * 0.06));
     return { x: viewW - s - 14, y: 14, w: s, h: s };
   }
   // The menu: a title, then three stacked buttons, centred as one block so it
   // fits a sideways phone (~375px tall) as well as a desktop.
   function pauseMenuRects() {
     const w = Math.max(220, Math.min(320, viewW * 0.6));
-    const h = Math.max(48, Math.min(64, viewH * 0.08));
+    const h = Math.max(realPx(48), Math.min(64, viewH * 0.08));
     const gap = Math.max(10, h * 0.25);
     const titleH = h * 1.3;
     const top = (viewH - (titleH + h * 3 + gap * 2)) / 2;
