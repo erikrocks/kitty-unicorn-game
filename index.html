@@ -7,7 +7,10 @@
   <meta charset="utf-8">
   <title>Kitty Unicorn Dolphin Rider</title>
   <!-- This meta tag prevents mobile browsers from zooming in when you tap! -->
-  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+  <!-- viewport-fit=cover: the ocean runs edge to edge, under the iPhone's notch
+       / Dynamic Island. The HUD and pause button are kept clear of it using the
+       safe-area insets (see readSafeArea). -->
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
   <meta name="description" content="Ride a dolphin, leap for rainbows, dodge the spiky things. A game designed by 7 year old Vivian.">
 
   <!-- Installable web app. No service worker: Chrome no longer requires one,
@@ -36,6 +39,11 @@
 </head>
 <body>
   <canvas id="gameCanvas"></canvas>
+  <!-- Invisible. Its padding is the phone's safe area (notch, Dynamic Island,
+       rounded corners), which is the only way JavaScript can read env() values. -->
+  <div id="safeArea" style="position: fixed; visibility: hidden; pointer-events: none;
+       padding: env(safe-area-inset-top, 0px) env(safe-area-inset-right, 0px)
+                env(safe-area-inset-bottom, 0px) env(safe-area-inset-left, 0px);"></div>
   <script>
   // =====================================================================
   // SETUP
@@ -217,6 +225,19 @@
   // 7-year-old can read. (They never grow past what fits on screen.)
   function pageMaxScale() { return Math.max(1, 1 / zoom); }
 
+  // How much of each edge is covered by the notch / Dynamic Island / rounded
+  // corners, in game units. Zero on most screens. Only the HUD and the pause
+  // button need to stay clear of it; the ocean deliberately runs underneath.
+  let safeL = 0, safeR = 0, safeT = 0;
+  function readSafeArea() {
+    const el = document.getElementById('safeArea');
+    if (!el) return;
+    const cs = getComputedStyle(el);
+    safeL = (parseFloat(cs.paddingLeft) || 0) / zoom;
+    safeR = (parseFloat(cs.paddingRight) || 0) / zoom;
+    safeT = (parseFloat(cs.paddingTop) || 0) / zoom;
+  }
+
   function resizeCanvas() {
     const dpr = window.devicePixelRatio || 1;
     const cssW = window.innerWidth, cssH = window.innerHeight;
@@ -231,6 +252,7 @@
 
     // Changing canvas.width resets the context, so re-apply the scale here.
     ctx.setTransform(dpr * zoom, 0, 0, dpr * zoom, 0, 0);
+    readSafeArea();
   }
 
   resizeCanvas();
@@ -255,7 +277,8 @@
   // The dolphin's home x position, worked out from the current screen width.
   // It's a function rather than a constant so rotating a phone recalculates it.
   function playerHomeX() {
-    return Math.max(PLAYER_X_MIN, Math.min(PLAYER_X_MAX, viewW * PLAYER_X_FRAC));
+    // + safeL so a notch on the left can't sit on top of the dolphin's tail.
+    return safeL + Math.max(PLAYER_X_MIN, Math.min(PLAYER_X_MAX, viewW * PLAYER_X_FRAC));
   }
 
   // Where the "Try Again" button sits on the GAME OVER screen. Both the
@@ -384,14 +407,15 @@
 
   // --- HUD (score + lives, top left) ---
   function hudFontSize() { return Math.max(16, Math.min(30, viewW * 0.04)); }
-  function hudLivesY() { return 50 + hudFontSize() * 2.2; }
+  function hudX() { return 20 + safeL; }   // clear of a notch on the left
+  function hudLivesY() { return 50 + safeT + hudFontSize() * 2.2; }
 
   // --- pause ---
   // Top-right corner while playing. Floored at 48px like every other button:
   // it's a small icon, so it's the one most likely to shrink below a finger.
   function pauseButtonRect() {
     const s = Math.max(realPx(48), Math.min(60, viewW * 0.06));
-    return { x: viewW - s - 14, y: 14, w: s, h: s };
+    return { x: viewW - s - 14 - safeR, y: 14 + safeT, w: s, h: s };   // clear of a notch on the right
   }
   // The menu: a title, then three stacked buttons, centred as one block so it
   // fits a sideways phone (~375px tall) as well as a desktop.
@@ -2050,7 +2074,7 @@
       let hudFont = hudFontSize();
       ctx.fillStyle = 'black';
       ctx.font = `bold ${hudFont}px Arial`;
-      ctx.fillText('Money (Gems & Donuts): ' + score, 20, 40 + hudFont);
+      ctx.fillText('Money (Gems & Donuts): ' + score, hudX(), 40 + safeT + hudFont);
       // Hearts, but a long row would run off a phone screen once the bonus
       // starts paying out, so past HEART_DISPLAY_MAX it becomes a count.
       const shown = Math.max(0, lives);
@@ -2059,11 +2083,11 @@
         : '❤️ x' + shown;
       const livesY = hudLivesY();
       const livesLabel = 'Lives: ' + heartText;
-      ctx.fillText(livesLabel, 20, livesY);
+      ctx.fillText(livesLabel, hudX(), livesY);
 
       // x2 badge, right after the hearts, pulsing so you notice you have it.
       if (scoreMultiplier() > 1) {
-        const badgeX = 20 + ctx.measureText(livesLabel).width + 12;
+        const badgeX = hudX() + ctx.measureText(livesLabel).width + 12;
         const bh = hudFont * 1.25;
         // Size the pill from the MEASURED text, not a guessed multiple of the
         // font size — guessing clipped the final letter.
