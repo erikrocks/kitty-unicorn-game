@@ -247,6 +247,20 @@ repo containing nothing else.
 - iOS status bar is `default`, not `black-translucent`: the top of the screen during play is
   pale sky blue, and a translucent bar draws its clock in white on top of it.
 
+## Native apps (iOS + Android) — `~/Desktop/kudr-app`
+Separate repo, same arrangement as `bubble-app`: a thin native wrapper per store (Swift
+`WKWebView` / Java `WebView`), landscape-locked, app ID `com.eriksheridan.kudr`. **Both pull
+THIS `index.html` in at every build** — Xcode by file reference, Gradle by a sync task — so
+any change here ships in the apps next time they're built. Never edit a copy there. Build
+and store steps are in that repo's README.
+
+- The game runs edge to edge in the apps (`viewport-fit=cover`); the HUD, pause button and
+  dolphin are offset by the safe-area insets (`readSafeArea()`). Sideways, an iPhone's
+  Dynamic Island sits mid-height on one side, clear of the HUD either way. Note: inside the
+  iOS app the insets currently read as 0 — harmless on today's phones, but don't rely on
+  them for anything that WOULD collide.
+- Android pads the WebView away from a camera cutout natively instead.
+
 ## Hosting — DONE, live
 **<https://kudr.eriksheridan.com>** — GitHub Pages from `erikrocks/kitty-unicorn-game`,
 custom domain set, HTTPS enforced, DNS `CNAME kudr → erikrocks.github.io` in place.
