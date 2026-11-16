@@ -261,6 +261,8 @@
   // what's coming. The app versions lock the screen sideways; in a browser we
   // can't, so we show a "turn it sideways" screen instead (drawRotatePrompt).
   function isPortrait() { return viewH > viewW; }
+  // A phone or tablet: no Enter key to press, and "click" is the wrong word.
+  function isTouchDevice() { return 'ontouchstart' in window || navigator.maxTouchPoints > 0; }
 
   // Where the surface of the water sits.
   function waterLineY() {
@@ -1779,7 +1781,7 @@
     ctx.fillStyle = '#87CEEB'; ctx.fill();
     ctx.restore();
 
-    const touch = 'ontouchstart' in window || navigator.maxTouchPoints > 0;
+    const touch = isTouchDevice();
     const font = Math.max(18, Math.min(28, viewW * 0.065));
     ctx.textAlign = 'center';
     ctx.fillStyle = 'white';
@@ -2129,7 +2131,9 @@
       // measured title and credits from the screen centre independently, so on
       // a narrow phone (where the title shrinks but the credit doesn't) they
       // collided.
-      const titleY = viewH / 2 - titleFont * 2.4;
+      // Lifted when the "Your best" line is shown, so that line has room above
+      // the buttons instead of sitting on top of them.
+      const titleY = viewH / 2 - titleFont * 2.4 - (personalBest > 0 ? creditFont : 0);
       ctx.fillStyle = '#FF69B4';
       ctx.font = `bold ${titleFont}px Arial`;
       ctx.fillText('Kitty Unicorn Dolphin Rider', viewW / 2, titleY);
@@ -2160,7 +2164,8 @@
       ctx.fillStyle = '#FFD700';
       ctx.font = `bold ${promptFont}px Arial`;
       ctx.globalAlpha = 0.5 + Math.abs(Math.sin(elapsed * 3)) * 0.5;
-      ctx.fillText('Click or press Enter to Start!', viewW / 2, hb.y + hb.h + promptFont * 2.0);
+      ctx.fillText(isTouchDevice() ? 'Tap to Start!' : 'Click or press Enter to Start!',
+                   viewW / 2, hb.y + hb.h + promptFont * 2.0);
       ctx.globalAlpha = 1.0;
 
       ctx.textAlign = 'left';
@@ -2238,7 +2243,7 @@
       // fell off the bottom — and a phone held sideways has no keyboard to
       // press Enter with anyway, so omitting it there loses nothing.
       const hintY = btn.y + btn.h + retryFont * 1.3;
-      if (hintY <= viewH - 6) {
+      if (hintY <= viewH - 6 && !isTouchDevice()) {   // no Enter key on a phone
         ctx.fillStyle = 'rgba(255, 255, 255, 0.75)';
         ctx.font = `${Math.max(12, retryFont * 0.62)}px Arial`;
         ctx.fillText('(or press Enter)', viewW / 2, hintY);
