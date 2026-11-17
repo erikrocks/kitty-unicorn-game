@@ -241,11 +241,15 @@
   // that zooming out on a phone doesn't shrink their text below what a
   // 7-year-old can read. (They never grow past what fits on screen.)
   function pageMaxScale() { return Math.max(1, 1 / zoom); }
+  // The height those pages may use: the screen minus the strip at the bottom
+  // where an iPhone's home bar lives. Their Back buttons sit at the very
+  // bottom, and a button on the home bar is a button a kid swipes home with.
+  function pageH() { return viewH - safeB; }
 
   // How much of each edge is covered by the notch / Dynamic Island / rounded
   // corners, in game units. Zero on most screens. Only the HUD and the pause
   // button need to stay clear of it; the ocean deliberately runs underneath.
-  let safeL = 0, safeR = 0, safeT = 0;
+  let safeL = 0, safeR = 0, safeT = 0, safeB = 0;
   function readSafeArea() {
     const el = document.getElementById('safeArea');
     if (!el) return;
@@ -253,6 +257,19 @@
     safeL = (parseFloat(cs.paddingLeft) || 0) / zoom;
     safeR = (parseFloat(cs.paddingRight) || 0) / zoom;
     safeT = (parseFloat(cs.paddingTop) || 0) / zoom;
+    safeB = (parseFloat(cs.paddingBottom) || 0) / zoom;
+  }
+  // The safe area is re-read a couple of times a second, not only on resize.
+  // It's cheap, and a wrapper app is free to change these numbers (rotating
+  // between the two landscape directions, say) without a resize ever firing.
+  let safeAreaAge = 0;
+  function refreshSafeArea(dt) {
+    safeAreaAge += dt;
+    if (safeAreaAge < 0.5) return;
+    safeAreaAge = 0;
+    const before = safeL;
+    readSafeArea();
+    if (safeL !== before) player.x = playerHomeX();   // keep the dolphin clear of the notch too
   }
 
   function resizeCanvas() {
@@ -329,8 +346,8 @@
     const wide = viewW >= viewH * 1.25;
     const natW = wide ? 660 : 330;
     const natH = wide ? 330 : 520;
-    const scale = Math.min(pageMaxScale(), (viewH - 30) / natH, (viewW - 30) / natW);
-    return { wide: wide, s: scale, cx: viewW / 2, top: (viewH - natH * scale) / 2 };
+    const scale = Math.min(pageMaxScale(), (pageH() - 30) / natH, (viewW - 30) / natW);
+    return { wide: wide, s: scale, cx: viewW / 2, top: (pageH() - natH * scale) / 2 };
   }
 
   // Where everything sits, in natural units, for each of the two shapes.
@@ -372,8 +389,8 @@
 
   // --- initials entry ---
   function initialsLayout() {
-    const s = Math.min(pageMaxScale(), (viewH - 40) / 420, (viewW - 30) / 320);
-    return { s: s, cx: viewW / 2, top: (viewH - 420 * s) / 2 };
+    const s = Math.min(pageMaxScale(), (pageH() - 40) / 420, (viewW - 30) / 320);
+    return { s: s, cx: viewW / 2, top: (pageH() - 420 * s) / 2 };
   }
   function initialsSlotRect(i) {
     const L = initialsLayout();
@@ -409,8 +426,8 @@
 
   // --- leaderboard ---
   function boardLayout() {
-    const s = Math.min(pageMaxScale(), (viewH - 30) / 520, (viewW - 24) / 340);
-    return { s: s, cx: viewW / 2, top: (viewH - 520 * s) / 2 };
+    const s = Math.min(pageMaxScale(), (pageH() - 30) / 520, (viewW - 24) / 340);
+    return { s: s, cx: viewW / 2, top: (pageH() - 520 * s) / 2 };
   }
   function boardTabRect(i) {
     const L = boardLayout();
@@ -2472,6 +2489,7 @@
     if (dt > MAX_DT) dt = MAX_DT;
 
     elapsed += dt;
+    refreshSafeArea(dt);
 
     ctx.clearRect(0, 0, viewW, viewH);
     // Ease toward the target. Eased in loop() rather than update() so the

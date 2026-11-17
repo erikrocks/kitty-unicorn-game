@@ -221,6 +221,13 @@ while dodging spiky shells. Endless.
   if it failed, an array when loaded, and superseded responses are discarded via
   `boardRequest`. One shared status let a fast "this week" reply mark "all time" as loaded
   while it was still in flight, so it wrongly claimed the board was down.
+- **Testing the Android app: use the `KUDR_Test` emulator** (`emulator -avd KUDR_Test -port
+  5556`, then `adb -s emulator-5556 ...`), not the shared `Medium_Phone` one — another
+  session restarting that one mid-test wiped out three runs. On a fresh boot, expect a
+  "System UI isn't responding" dialog and the one-time full-screen tip to swallow taps:
+  check `dumpsys window | grep mCurrentFocus` shows the app before trusting a touch test.
+  The headless emulator runs at ~8fps, so anything timed (the 3-2-1) takes about twice as
+  long there; that's `MAX_DT` slowing the game, not a bug.
 - **Testing trap:** when you stub a game function in the console (`spawn = () => {}`), reload
   before the next test. A leftover stub made a whole fuzzer run meaningless.
 
@@ -278,10 +285,13 @@ any change here ships in the apps next time they're built. Never edit a copy the
 and store steps are in that repo's README.
 
 - The game runs edge to edge in the apps (`viewport-fit=cover`); the HUD, pause button and
-  dolphin are offset by the safe-area insets (`readSafeArea()`). Sideways, an iPhone's
-  Dynamic Island sits mid-height on one side, clear of the HUD either way. Note: inside the
-  iOS app the insets currently read as 0 — harmless on today's phones, but don't rely on
-  them for anything that WOULD collide.
+  dolphin are offset by the safe-area insets (`readSafeArea()`, re-read twice a second by
+  `refreshSafeArea()`), and the how-to / high score / initials pages stay above the home
+  bar (`pageH()`). **The iOS wrapper must NOT set
+  `scrollView.contentInsetAdjustmentBehavior = .never`** — that made WebKit report every
+  inset as 0, so the score sat under the island's side and the Back buttons sat on the home
+  bar. It looked like "the insets read 0 in the app" for a week before testing found the
+  cause was that one line in `App.swift`, not the game.
 - Android pads the WebView away from a camera cutout natively instead.
 
 ## Hosting — DONE, live
