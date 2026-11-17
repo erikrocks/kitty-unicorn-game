@@ -456,7 +456,10 @@
     const s = Math.max(realPx(48), Math.min(60, viewW * 0.06));
     return { x: viewW - s - 14 - safeR, y: 14 + safeT, w: s, h: s };   // clear of a notch on the right
   }
-  // The menu: a title, then three stacked buttons, centred as one block so it
+  // The sound on/off button borrows the pause button's corner. It shows on the
+  // start screen and the pause menu, where the pause button itself isn't drawn.
+  function soundButtonRect() { return pauseButtonRect(); }
+  // The menu: a title, then four stacked buttons, centred as one block so it
   // fits a sideways phone (~375px tall) as well as a desktop.
   function pauseMenuRects() {
     const w = Math.max(220, Math.min(320, viewW * 0.6));
@@ -740,10 +743,30 @@
 
   // --- AUDIO SYSTEM ----------------------------------------------------
   let audioCtx = null;
+  // Every sound is connected to this one "master volume" rather than straight
+  // to the speakers, so the sound on/off button only has to turn one knob —
+  // and any sound added later is muted with the rest automatically.
+  let soundOut = null;
+  let soundOn = loadSoundSetting();
+
+  // Remembered on this device (`kudr.sound`). Only the exact word "off" mutes;
+  // anything else, including nothing saved or a mangled value, means sound on.
+  function loadSoundSetting() {
+    try { return localStorage.getItem('kudr.sound') !== 'off'; } catch (e) { return true; }
+  }
+  function setSound(on) {
+    soundOn = on;
+    if (soundOut) soundOut.gain.value = on ? 1 : 0;
+    try { localStorage.setItem('kudr.sound', on ? 'on' : 'off'); } catch (e) {}
+    if (on) playCollectSound(false);   // a little chime, so you can hear it came back
+  }
 
   function initAudio() {
     if (!audioCtx) {
       audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+      soundOut = audioCtx.createGain();
+      soundOut.gain.value = soundOn ? 1 : 0;
+      soundOut.connect(audioCtx.destination);
     }
     if (audioCtx.state === 'suspended') {
       audioCtx.resume();
@@ -754,7 +777,7 @@
     if (!audioCtx) return;
     let osc = audioCtx.createOscillator();
     let gain = audioCtx.createGain();
-    osc.connect(gain); gain.connect(audioCtx.destination);
+    osc.connect(gain); gain.connect(soundOut);
 
     osc.type = 'sine';
     let freq = isDonut ? 1200 : 800;
@@ -771,7 +794,7 @@
     if (!audioCtx) return;
     let osc = audioCtx.createOscillator();
     let gain = audioCtx.createGain();
-    osc.connect(gain); gain.connect(audioCtx.destination);
+    osc.connect(gain); gain.connect(soundOut);
 
     osc.type = 'sawtooth';
     osc.frequency.setValueAtTime(300, audioCtx.currentTime);
@@ -787,7 +810,7 @@
     if (!audioCtx) return;
     let osc = audioCtx.createOscillator();
     let gain = audioCtx.createGain();
-    osc.connect(gain); gain.connect(audioCtx.destination);
+    osc.connect(gain); gain.connect(soundOut);
 
     osc.type = 'square';
     osc.frequency.setValueAtTime(400, audioCtx.currentTime);
@@ -809,7 +832,7 @@
       const t = audioCtx.currentTime + i * 0.07;
       let osc = audioCtx.createOscillator();
       let gain = audioCtx.createGain();
-      osc.connect(gain); gain.connect(audioCtx.destination);
+      osc.connect(gain); gain.connect(soundOut);
 
       osc.type = 'triangle';
       osc.frequency.setValueAtTime(freq, t);
@@ -833,7 +856,7 @@
       [step[1], step[2]].forEach(freq => {
         let osc = audioCtx.createOscillator();
         let gain = audioCtx.createGain();
-        osc.connect(gain); gain.connect(audioCtx.destination);
+        osc.connect(gain); gain.connect(soundOut);
 
         osc.type = 'square';
         osc.frequency.setValueAtTime(freq, t0 + when);
@@ -849,7 +872,7 @@
     // A bright sweep on top, so it sparkles rather than just honking.
     let shine = audioCtx.createOscillator();
     let shineGain = audioCtx.createGain();
-    shine.connect(shineGain); shineGain.connect(audioCtx.destination);
+    shine.connect(shineGain); shineGain.connect(soundOut);
     shine.type = 'triangle';
     shine.frequency.setValueAtTime(1046.5, t0 + 0.22);
     shine.frequency.exponentialRampToValueAtTime(2093, t0 + 0.42);
@@ -868,7 +891,7 @@
     bloop.frequency.exponentialRampToValueAtTime(100, audioCtx.currentTime + 0.15);
     bloopGain.gain.setValueAtTime(0.6, audioCtx.currentTime);
     bloopGain.gain.exponentialRampToValueAtTime(0.01, audioCtx.currentTime + 0.15);
-    bloop.connect(bloopGain); bloopGain.connect(audioCtx.destination);
+    bloop.connect(bloopGain); bloopGain.connect(soundOut);
     bloop.start(); bloop.stop(audioCtx.currentTime + 0.15);
 
     let bufferSize = audioCtx.sampleRate * 0.15;
@@ -882,7 +905,7 @@
     let noiseGain = audioCtx.createGain();
     noiseGain.gain.setValueAtTime(0.4, audioCtx.currentTime);
     noiseGain.gain.exponentialRampToValueAtTime(0.01, audioCtx.currentTime + 0.15);
-    noise.connect(filter); filter.connect(noiseGain); noiseGain.connect(audioCtx.destination);
+    noise.connect(filter); filter.connect(noiseGain); noiseGain.connect(soundOut);
     noise.start();
   }
 
@@ -999,7 +1022,8 @@
       // Tapping a button opens that page; tapping anywhere else still just
       // starts the game, the way it always has.
       const sb = startButtonRects();
-      if (pointInRect(pointerX, pointerY, sb.howTo)) gameState = 'HOWTO';
+      if (pointInRect(pointerX, pointerY, soundButtonRect())) setSound(!soundOn);
+      else if (pointInRect(pointerX, pointerY, sb.howTo)) gameState = 'HOWTO';
       else if (pointInRect(pointerX, pointerY, sb.board)) openLeaderboard();
       else handleGameStart();
     } else if (gameState === 'ENTER_INITIALS') {
@@ -1033,6 +1057,11 @@
       // During the countdown the menu is gone; a press just gets you ready to swim.
       if (resumeCountdown > 0) { isPressing = true; return; }
       const pm = pauseMenuRects();
+      if (pointInRect(pointerX, pointerY, soundButtonRect())) {
+        restartArmed = 0;
+        setSound(!soundOn);
+        return;
+      }
       if (pointInRect(pointerX, pointerY, pm.restart)) {
         // First tap arms it, second tap (while it's still armed) restarts.
         if (restartArmed > 0) restartRun();
@@ -1091,6 +1120,7 @@
     if (gameState === 'LEADERBOARD' && (e.code === 'Enter' || e.code === 'Escape')) {
       closeMenuPage(); e.preventDefault(); return;
     }
+    if (e.code === 'KeyM') { initAudio(); setSound(!soundOn); e.preventDefault(); return; }   // M mutes
     // Escape or P pauses; on the pause menu, Escape / P / Enter resume.
     if (e.code === 'Escape' || e.code === 'KeyP') {
       if (gameState === 'PLAYING') pauseGame();
@@ -1986,6 +2016,34 @@
     ctx.fillRect(0, 0, viewW, viewH);
   }
 
+  // The sound button: a little speaker on the same dark circle as the pause
+  // button. Sound waves when it's on; a red slash through it when it's off.
+  function drawSoundButton() {
+    const r = soundButtonRect();
+    const cx = r.x + r.w / 2, cy = r.y + r.h / 2, u = r.w / 48;   // u: 1 at the smallest size
+    ctx.beginPath();
+    ctx.arc(cx, cy, r.w / 2, 0, Math.PI * 2);
+    ctx.fillStyle = pointInRect(pointerX, pointerY, r) ? 'rgba(0,0,0,0.45)' : 'rgba(0,0,0,0.3)';
+    ctx.fill();
+    // speaker: a small box with a cone opening to the right
+    ctx.fillStyle = 'white';
+    ctx.beginPath();
+    ctx.moveTo(cx - 13 * u, cy - 4.5 * u); ctx.lineTo(cx - 7 * u, cy - 4.5 * u);
+    ctx.lineTo(cx, cy - 11 * u);           ctx.lineTo(cx, cy + 11 * u);
+    ctx.lineTo(cx - 7 * u, cy + 4.5 * u);  ctx.lineTo(cx - 13 * u, cy + 4.5 * u);
+    ctx.closePath(); ctx.fill();
+    ctx.lineCap = 'round';
+    if (soundOn) {
+      ctx.strokeStyle = 'white'; ctx.lineWidth = 2.6 * u;
+      ctx.beginPath(); ctx.arc(cx + 1 * u, cy, 6 * u, -0.9, 0.9); ctx.stroke();
+      ctx.beginPath(); ctx.arc(cx + 1 * u, cy, 11.5 * u, -0.9, 0.9); ctx.stroke();
+    } else {
+      ctx.strokeStyle = '#FF5A6E'; ctx.lineWidth = 3.4 * u;
+      ctx.beginPath(); ctx.moveTo(cx - 13 * u, cy + 12 * u); ctx.lineTo(cx + 13 * u, cy - 12 * u); ctx.stroke();
+    }
+    ctx.lineCap = 'butt';
+  }
+
   // The pause button: two white bars on a soft dark circle, so it reads
   // against both the pale sky and the water.
   function drawPauseButton() {
@@ -2049,6 +2107,7 @@
              'rgba(255,255,255,0.28)', 'white', btnFont);
     ctx.restore();   // end of the pop-in started by beginScreenPop()
     ctx.textAlign = 'left';
+    drawSoundButton();
   }
 
   // Shared pill-button drawing, so every button in the game looks the same.
@@ -2405,6 +2464,7 @@
       ctx.globalAlpha = 1.0;
 
       ctx.textAlign = 'left';
+      drawSoundButton();   // so a grown-up can mute it before a game even starts
     }
 
     // --- GAME OVER SCREEN (RESPONSIVE) ---

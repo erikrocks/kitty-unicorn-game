@@ -46,6 +46,11 @@ while dodging spiky shells. Endless.
 - **Web Audio from scratch** — collect, donut, heart, hit, splash, the rainbow's rising
   arpeggio and the x2 fanfare, all synthesized in code (no audio files). Unlocked on first
   tap. Each one is deliberately a different shape so you can tell them apart by ear.
+  **Sound on/off**: a speaker button in the top-right corner of the start screen and the
+  pause menu (`soundButtonRect()` is the pause button's corner, which is free on those
+  screens), or the M key. Every sound connects to one master volume, `soundOut`, never
+  straight to `audioCtx.destination` — connect new sounds the same way or the mute button
+  won't silence them. The choice is saved as `kudr.sound`; only the exact word `off` mutes.
 - **Collectibles**: gems (10 pts) spawn anywhere; donuts (50 pts), hearts (+1 life) and
   **rainbows (116 pts)** are **air-only**, so the valuable stuff costs you a leap. They bob
   and drift in.
