@@ -292,7 +292,11 @@ and store steps are in that repo's README.
   inset as 0, so the score sat under the island's side and the Back buttons sat on the home
   bar. It looked like "the insets read 0 in the app" for a week before testing found the
   cause was that one line in `App.swift`, not the game.
-- Android pads the WebView away from a camera cutout natively instead.
+- Android does the same — NO native padding around the camera cutout. It had some at
+  first, and on a real Pixel 10 Pro the inset was applied twice (a navy bar down the left,
+  then the score pushed in again). **Emulators have no cutout and no real GPU load: check
+  layout and speed on a real phone.** The game runs at 120fps on that Pixel; the emulator
+  managed 3-8fps on a busy Mac and said nothing true about performance.
 
 ## Hosting — DONE, live
 **<https://kudr.eriksheridan.com>** — GitHub Pages from `erikrocks/kitty-unicorn-game`,
