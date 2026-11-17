@@ -145,6 +145,7 @@
   // what happened. Before it, a 116-point rainbow simply vanished.
   const POPUP_LIFE     = 0.9;  // seconds a "+10" floats before it's gone
   const POPUP_RISE     = 70;   // how fast it floats up, per second
+  const POPUP_LIFT     = 92;   // how far above the pickup it starts (clear of the kitten's horn)
   const SPARKLE_COUNT  = 10;   // little stars thrown out by each pickup
   const SPARKLE_SPEED  = 300;
   const SPARKLE_FADE   = 1.5;  // per second
@@ -1149,9 +1150,12 @@
 
   // A floating "+10" where a treasure was collected.
   function addPopup(x, y, text, color, size) {
-    // Starts a little above the treasure, so it clears the kitten's head
-    // (a pickup always happens right on top of her).
-    popups.push({ x: x, y: y - 38, text: text, color: color, size: size, life: POPUP_LIFE });
+    // Starts well above the treasure. A pickup always happens right on top of
+    // the hero, and the kitten's face is ~60px above that point: any lower
+    // and the number covers her.
+    // ...but never so high it floats off the top of the screen.
+    const startY = Math.max(size + 40 + safeT, y - POPUP_LIFT);
+    popups.push({ x: x, y: startY, text: text, color: color, size: size, life: POPUP_LIFE });
   }
 
   // A ring of little stars flying out of a pickup, in the treasure's colour.
@@ -2244,7 +2248,6 @@
         drawObstacle(obs.kind, Math.round(obs.x), Math.round(obs.y), warn);
       });
 
-      drawPickupEffects();
       drawHurtFlash();
     }
 
@@ -2297,6 +2300,10 @@
         ctx.fillStyle = 'black';
       }
     }
+
+    // Pickup stars and "+10"s go on top of the score and hearts: a high leap
+    // carries them into that corner, and under the HUD they were a muddle.
+    if (gameState === 'PLAYING' || gameState === 'PAUSED') drawPickupEffects();
 
     if (gameState === 'PLAYING') drawPauseButton();
     if (gameState === 'PAUSED') drawPauseMenu();
