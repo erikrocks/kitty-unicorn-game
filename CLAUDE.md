@@ -221,13 +221,14 @@ while dodging spiky shells. Endless.
   if it failed, an array when loaded, and superseded responses are discarded via
   `boardRequest`. One shared status let a fast "this week" reply mark "all time" as loaded
   while it was still in flight, so it wrongly claimed the board was down.
-- **Testing the Android app: use the `KUDR_Test` emulator** (`emulator -avd KUDR_Test -port
-  5556`, then `adb -s emulator-5556 ...`), not the shared `Medium_Phone` one — another
-  session restarting that one mid-test wiped out three runs. On a fresh boot, expect a
-  "System UI isn't responding" dialog and the one-time full-screen tip to swallow taps:
-  check `dumpsys window | grep mCurrentFocus` shows the app before trusting a touch test.
-  The headless emulator runs at ~8fps, so anything timed (the 3-2-1) takes about twice as
-  long there; that's `MAX_DT` slowing the game, not a bug.
+- **Test the Android app on a real phone, not an emulator.** Erik removed the Android
+  emulators from this Mac (Nov 2026) and tests on his Pixel 10 Pro over USB
+  (`adb devices`, then `adb -s <serial> install -r app-debug.apk`). The emulator was never
+  a good judge anyway: it has no camera cutout (so it hid a doubled-inset bug), ran at
+  3-8fps on a busy Mac (the Pixel does 120), and on a fresh boot its "System UI isn't
+  responding" dialog and one-time full-screen tip swallow taps. If one is ever needed
+  again, create it in Android Studio's Device Manager and check
+  `dumpsys window | grep mCurrentFocus` shows the app before trusting a touch test.
 - **Testing trap:** when you stub a game function in the console (`spawn = () => {}`), reload
   before the next test. A leftover stub made a whole fuzzer run meaningless.
 
