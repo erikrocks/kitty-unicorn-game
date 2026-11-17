@@ -103,8 +103,12 @@ while dodging spiky shells. Endless.
   buttons side by side, and a blinking prompt. Tapping a button opens that page; tapping
   anywhere else still just starts the game.
 - **Pause menu** (`PAUSED` state): a pause button top-right during play (also Escape / P,
-  and automatic when you switch apps), with Resume, How to play and High scores — so the
-  board is reachable mid-run, not only after earning a place on it. Those pages go Back to
+  and automatic when you switch apps), with Resume, Restart, How to play and High scores —
+  so the board is reachable mid-run, not only after earning a place on it. **Restart takes
+  two taps**: the first arms it for `RESTART_CONFIRM` (3s) and it turns gold ("Tap again to
+  restart"); tapping anything else, waiting, or leaving the app stands it down. A stray
+  tap must never cost a kid a good run. `restartRun()` saves the abandoned score as the
+  personal best if it beat it, but never offers it to the online board. Those pages go Back to
   the paused run; the world is frozen until you resume. Only the buttons respond, so a
   stray tap can't drop a kid back into the ocean.
 - **High scores** (`LEADERBOARD` + `ENTER_INITIALS` states), backed by Supabase. Traditional

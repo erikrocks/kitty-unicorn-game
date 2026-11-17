@@ -156,6 +156,9 @@
   // Resuming from pause counts down first, so you're not dropped straight
   // back into the thing you paused to avoid.
   const RESUME_STEP    = 0.6;  // seconds each of "3", "2", "1" stays up
+  // Restart throws the current run away, so it takes two taps: the first one
+  // "arms" the button for this long, and only a second tap in that time restarts.
+  const RESTART_CONFIRM = 3;
   const SCREEN_POP     = 0.3;  // seconds the game-over / pause panels take to pop in
 
   // --- DIFFICULTY RAMP --------------------------------------------------
@@ -460,10 +463,10 @@
     const h = Math.max(realPx(48), Math.min(64, viewH * 0.08));
     const gap = Math.max(10, h * 0.25);
     const titleH = h * 1.3;
-    const top = (viewH - (titleH + h * 3 + gap * 2)) / 2;
+    const top = (viewH - (titleH + h * 4 + gap * 3)) / 2;
     const x = viewW / 2 - w / 2;
     const row = i => ({ x: x, y: top + titleH + i * (h + gap), w: w, h: h });
-    return { titleY: top + h * 0.85, resume: row(0), howTo: row(1), board: row(2) };
+    return { titleY: top + h * 0.85, resume: row(0), restart: row(1), howTo: row(2), board: row(3) };
   }
 
   function pointInRect(px, py, r) {
@@ -523,6 +526,7 @@
   let hurtLeft = 0;       // seconds of blink / can't-be-hit left after a bump
   let scoreShown = 0;     // what the HUD displays; it rolls up toward `score`
   let resumeCountdown = 0; // > 0 while "3, 2, 1" is showing after Resume
+  let restartArmed = 0;    // > 0 while Restart is waiting for its confirming second tap
   let screenAge = 0;      // seconds since gameState last changed (for the pop-in)
   let screenWas = 'START';
   const clouds = [];
@@ -900,6 +904,7 @@
     hurtLeft = 0;
     scoreShown = 0;
     resumeCountdown = 0;
+    restartArmed = 0;
     player.x = playerHomeX();
     player.y = viewH / 2;
     player.dy = 0;
@@ -907,8 +912,16 @@
     gameState = 'PLAYING';
   }
 
+  // Restart from the pause menu: give up this run and begin a new one. A run
+  // you walk away from can still be your best, so that's saved first.
+  function restartRun() {
+    if (score > personalBest) { personalBest = score; saveBest(personalBest); }
+    handleGameStart();
+  }
+
   function pauseGame() {
     resumeCountdown = 0;   // leaving mid-countdown (another app, a call) cancels it
+    restartArmed = 0;
     if (gameState !== 'PLAYING') return;
     gameState = 'PAUSED';
     runPaused = true;
@@ -1020,6 +1033,13 @@
       // During the countdown the menu is gone; a press just gets you ready to swim.
       if (resumeCountdown > 0) { isPressing = true; return; }
       const pm = pauseMenuRects();
+      if (pointInRect(pointerX, pointerY, pm.restart)) {
+        // First tap arms it, second tap (while it's still armed) restarts.
+        if (restartArmed > 0) restartRun();
+        else restartArmed = RESTART_CONFIRM;
+        return;
+      }
+      restartArmed = 0;   // tapping anything else stands the Restart button down
       if (pointInRect(pointerX, pointerY, pm.resume)) resumeGame();
       else if (pointInRect(pointerX, pointerY, pm.howTo)) gameState = 'HOWTO';
       else if (pointInRect(pointerX, pointerY, pm.board)) openLeaderboard();
@@ -2016,6 +2036,13 @@
     // Resume is the pink one — the same colour as Try Again — because it's
     // the thing you almost always want.
     drawPill(pm.resume, 'Resume', '#FF69B4', '#FF9AD5', 'white', btnFont);
+    // Armed, the Restart button turns gold and asks for the second tap.
+    if (restartArmed > 0) {
+      drawPill(pm.restart, 'Tap again to restart', '#FFD93D', '#FFE680', '#4A3200', btnFont);
+    } else {
+      drawPill(pm.restart, 'Restart', 'rgba(255,255,255,0.14)',
+               'rgba(255,255,255,0.28)', 'white', btnFont);
+    }
     drawPill(pm.howTo, 'How to play', 'rgba(255,255,255,0.14)',
              'rgba(255,255,255,0.28)', 'white', btnFont);
     drawPill(pm.board, 'High scores', 'rgba(255,255,255,0.14)',
@@ -2514,6 +2541,7 @@
       resumeCountdown -= dt;
       if (resumeCountdown <= 0) finishResume();
     }
+    if (restartArmed > 0) restartArmed -= dt;   // un-arms itself if the second tap never comes
     draw();
     requestAnimationFrame(loop);
   }
