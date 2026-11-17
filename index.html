@@ -141,6 +141,22 @@
   const SPLASH_GRAVITY = 1800;
   const SPLASH_FADE    = 1.8; // how fast a droplet fades out, per second
 
+  // Feedback ("juice"): none of this changes the rules, it just lets you SEE
+  // what happened. Before it, a 116-point rainbow simply vanished.
+  const POPUP_LIFE     = 0.9;  // seconds a "+10" floats before it's gone
+  const POPUP_RISE     = 70;   // how fast it floats up, per second
+  const SPARKLE_COUNT  = 10;   // little stars thrown out by each pickup
+  const SPARKLE_SPEED  = 300;
+  const SPARKLE_FADE   = 1.5;  // per second
+  // After a bump the hero blinks and can't be hit again for a moment. Two
+  // hazards close together used to take two hearts before you could react.
+  const HURT_TIME      = 1.2;
+  const HURT_FLASH     = 0.35; // how long the soft red edge glow lasts
+  // Resuming from pause counts down first, so you're not dropped straight
+  // back into the thing you paused to avoid.
+  const RESUME_STEP    = 0.6;  // seconds each of "3", "2", "1" stays up
+  const SCREEN_POP     = 0.3;  // seconds the game-over / pause panels take to pop in
+
   // --- DIFFICULTY RAMP --------------------------------------------------
   // Difficulty ramps on SCORE, not on time. Time-based punished a beginner
   // for surviving and let a strong player coast; scoring is what actually
@@ -484,6 +500,13 @@
   const items = [];
   const obstacles = [];
   const splashes = [];
+  const popups = [];      // floating "+10" texts: { x, y, text, color, size, life }
+  const sparkles = [];    // pickup stars: { x, y, dx, dy, life, color }
+  let hurtLeft = 0;       // seconds of blink / can't-be-hit left after a bump
+  let scoreShown = 0;     // what the HUD displays; it rolls up toward `score`
+  let resumeCountdown = 0; // > 0 while "3, 2, 1" is showing after Resume
+  let screenAge = 0;      // seconds since gameState last changed (for the pop-in)
+  let screenWas = 'START';
   const clouds = [];
 
   for (let i = 0; i < 6; i++) {
@@ -854,6 +877,11 @@
     items.length = 0;
     obstacles.length = 0;
     splashes.length = 0;
+    popups.length = 0;
+    sparkles.length = 0;
+    hurtLeft = 0;
+    scoreShown = 0;
+    resumeCountdown = 0;
     player.x = playerHomeX();
     player.y = viewH / 2;
     player.dy = 0;
@@ -862,15 +890,23 @@
   }
 
   function pauseGame() {
+    resumeCountdown = 0;   // leaving mid-countdown (another app, a call) cancels it
     if (gameState !== 'PLAYING') return;
     gameState = 'PAUSED';
     runPaused = true;
     isPressing = false;  // a held press mustn't still be "on" when you resume
   }
+  // Resume doesn't drop you straight back in: it counts "3, 2, 1" first (see
+  // loop() and drawPauseMenu()), then finishResume() actually restarts play.
   function resumeGame() {
+    if (resumeCountdown <= 0) resumeCountdown = RESUME_STEP * 3;
+  }
+  function finishResume() {
+    resumeCountdown = 0;
     gameState = 'PLAYING';
     runPaused = false;
-    isPressing = false;
+    // isPressing is deliberately left alone: if you're already holding when
+    // the countdown ends, the dolphin starts swimming up straight away.
   }
   // Where Back goes from the how-to and high score pages: to the paused run
   // if you came from the pause menu, otherwise the title screen.
@@ -963,6 +999,8 @@
     } else if (gameState === 'PAUSED') {
       // Only the buttons do anything — a stray tap shouldn't drop you back
       // into the ocean before you're ready.
+      // During the countdown the menu is gone; a press just gets you ready to swim.
+      if (resumeCountdown > 0) { isPressing = true; return; }
       const pm = pauseMenuRects();
       if (pointInRect(pointerX, pointerY, pm.resume)) resumeGame();
       else if (pointInRect(pointerX, pointerY, pm.howTo)) gameState = 'HOWTO';
@@ -1018,7 +1056,10 @@
     // Escape or P pauses; on the pause menu, Escape / P / Enter resume.
     if (e.code === 'Escape' || e.code === 'KeyP') {
       if (gameState === 'PLAYING') pauseGame();
-      else if (gameState === 'PAUSED') resumeGame();
+      else if (gameState === 'PAUSED') {
+        if (resumeCountdown > 0) resumeCountdown = 0;   // changed your mind: back to the menu
+        else resumeGame();
+      }
       else if (gameState === 'HOWTO') closeMenuPage();
       e.preventDefault(); return;
     }
@@ -1038,7 +1079,7 @@
       e.preventDefault();
     }
     if (e.code === 'Space') {
-      if (gameState === 'PLAYING') {
+      if (gameState === 'PLAYING' || resumeCountdown > 0) {
         initAudio();
         isPressing = true;
       }
@@ -1106,6 +1147,23 @@
     }
   }
 
+  // A floating "+10" where a treasure was collected.
+  function addPopup(x, y, text, color, size) {
+    // Starts a little above the treasure, so it clears the kitten's head
+    // (a pickup always happens right on top of her).
+    popups.push({ x: x, y: y - 38, text: text, color: color, size: size, life: POPUP_LIFE });
+  }
+
+  // A ring of little stars flying out of a pickup, in the treasure's colour.
+  function addSparkles(x, y, color) {
+    for (let i = 0; i < SPARKLE_COUNT; i++) {
+      const angle = (i / SPARKLE_COUNT) * Math.PI * 2 + Math.random() * 0.5;
+      const speed = SPARKLE_SPEED * (0.5 + Math.random() * 0.5);
+      sparkles.push({ x: x, y: y, dx: Math.cos(angle) * speed, dy: Math.sin(angle) * speed,
+                      life: 1, color: color });
+    }
+  }
+
   function createSplash(x, y, speed) {
     playSplashSound();
     for (let i = 0; i < 30; i++) {
@@ -1159,24 +1217,54 @@
       if (p.life <= 0) splashes.splice(i, 1);
     }
 
+    // --- Pickup pop-ups and sparkles ---
+    for (let i = popups.length - 1; i >= 0; i--) {
+      popups[i].y -= POPUP_RISE * dt;
+      popups[i].life -= dt;
+      if (popups[i].life <= 0) popups.splice(i, 1);
+    }
+    for (let i = sparkles.length - 1; i >= 0; i--) {
+      const sp = sparkles[i];
+      sp.x += sp.dx * dt;
+      sp.y += sp.dy * dt;
+      sp.dx = applyDrag(sp.dx, 0.92, dt);   // they shoot out, then hang and fade
+      sp.dy = applyDrag(sp.dy, 0.92, dt);
+      sp.life -= SPARKLE_FADE * dt;
+      if (sp.life <= 0) sparkles.splice(i, 1);
+    }
+    if (hurtLeft > 0) hurtLeft -= dt;
+
+    // The HUD number rolls up to the real score instead of jumping.
+    scoreShown += (score - scoreShown) * (1 - Math.pow(0.0005, dt));
+    if (score - scoreShown < 0.5) scoreShown = score;
+
     // --- Gems, donuts and hearts ---
     for (let i = items.length - 1; i >= 0; i--) {
       items[i].x -= scrollSpeed() * dt;
       items[i].y = items[i].baseY + Math.sin(elapsed * 3 + items[i].phase) * 10;
 
       if (Math.abs(items[i].x - player.x) < 50 && Math.abs(items[i].y - player.y) < 50) {
+        const ix = items[i].x, iy = items[i].y;
         if (items[i].itemType === 'heart') {
           lives++;
           // The heart that unlocks the bonus plays the fanfare INSTEAD of the
           // usual chime — the two on top of each other were muddy.
           if (!checkDoubleBonus()) playHeartSound();
+          addPopup(ix, iy, '+1 \u2665', '#FF4D6D', 26);
+          addSparkles(ix, iy, '#FF8FA3');
         } else if (items[i].itemType === 'rainbow') {
-          score += RAINBOW_VALUE * scoreMultiplier();
+          const gained = RAINBOW_VALUE * scoreMultiplier();
+          score += gained;
           playRainbowSound();
+          addPopup(ix, iy, '+' + gained, '#FFD93D', 34);   // the big one gets a big number
+          addSparkles(ix, iy, '#FFD93D'); addSparkles(ix, iy, '#FF69B4');
         } else {
-          const base = items[i].itemType === 'donut' ? DONUT_VALUE : GEM_VALUE;
-          score += base * scoreMultiplier();
-          playCollectSound(items[i].itemType === 'donut');
+          const isDonut = items[i].itemType === 'donut';
+          const gained = (isDonut ? DONUT_VALUE : GEM_VALUE) * scoreMultiplier();
+          score += gained;
+          playCollectSound(isDonut);
+          addPopup(ix, iy, '+' + gained, isDonut ? '#FF8AD0' : '#7FFFF4', isDonut ? 26 : 22);
+          addSparkles(ix, iy, isDonut ? '#FF8AD0' : '#7FFFF4');
         }
         items.splice(i, 1);
       } else if (items[i].x < -50) {
@@ -1188,16 +1276,20 @@
     for (let i = obstacles.length - 1; i >= 0; i--) {
       obstacles[i].x -= OBSTACLE_SPEED * speedMult() * dt;
       const box = OBSTACLE_HITBOX[obstacles[i].kind] || OBSTACLE_HITBOX.shell;
-      if (Math.abs(obstacles[i].x - player.x) < box.hw &&
+      // hurtLeft > 0: still blinking from the last bump, so this one passes by.
+      if (hurtLeft <= 0 &&
+          Math.abs(obstacles[i].x - player.x) < box.hw &&
           Math.abs((obstacles[i].y + box.oy) - player.y) < box.hh) {
         playHitSound();
         lives--;
+        hurtLeft = HURT_TIME;
         checkDoubleBonus();   // losing the bonus re-arms the fanfare
         obstacles.splice(i, 1);
 
         if (lives <= 0) {
           gameState = 'GAMEOVER';
           isPressing = false;
+          scoreShown = score;   // no half-rolled number frozen behind the game-over panel
           // Ask the board whether this run earned a place. If we can't reach
           // it, qualifiesForBoard returns false and the player simply never
           // sees the initials screen — no error, no blocked game.
@@ -1794,6 +1886,65 @@
     ctx.textAlign = 'left';
   }
 
+  // Panels (game over, pause) pop in instead of snapping on: 0 -> 1 over
+  // SCREEN_POP seconds, overshooting a touch so it lands with a little bounce.
+  function screenFade() { return Math.min(1, screenAge / SCREEN_POP); }
+  function beginScreenPop() {
+    const t = screenFade() - 1;
+    const bounce = 1 + 2.7 * t * t * t + 1.7 * t * t;   // "ease out back"
+    const k = 0.75 + 0.25 * bounce;
+    ctx.save();
+    ctx.translate(viewW / 2, viewH / 2);
+    ctx.scale(k, k);
+    ctx.translate(-viewW / 2, -viewH / 2);
+  }
+
+  // Pickup feedback: little four-point stars flying out, and the "+10" that
+  // floats up from where the treasure was.
+  function drawPickupEffects() {
+    sparkles.forEach(sp => {
+      const r = 3 + sp.life * 8;
+      ctx.globalAlpha = Math.min(1, Math.max(0, sp.life * 1.6));   // bright, then a quick fade
+      ctx.fillStyle = sp.color;
+      ctx.beginPath();
+      ctx.moveTo(sp.x, sp.y - r);
+      ctx.lineTo(sp.x + r * 0.3, sp.y - r * 0.3); ctx.lineTo(sp.x + r, sp.y);
+      ctx.lineTo(sp.x + r * 0.3, sp.y + r * 0.3); ctx.lineTo(sp.x, sp.y + r);
+      ctx.lineTo(sp.x - r * 0.3, sp.y + r * 0.3); ctx.lineTo(sp.x - r, sp.y);
+      ctx.lineTo(sp.x - r * 0.3, sp.y - r * 0.3);
+      ctx.closePath(); ctx.fill();
+    });
+    ctx.textAlign = 'center';
+    ctx.lineJoin = 'round';
+    popups.forEach(pop => {
+      const t = 1 - pop.life / POPUP_LIFE;                  // 0 at birth, 1 when gone
+      const grow = t < 0.15 ? 0.6 + (t / 0.15) * 0.4 : 1;   // quick pop up to full size
+      ctx.globalAlpha = Math.min(1, pop.life / (POPUP_LIFE * 0.4));  // fade at the end
+      ctx.font = `bold ${pop.size * grow}px Arial`;
+      ctx.lineWidth = pop.size * 0.22;
+      ctx.strokeStyle = 'rgba(11, 47, 82, 0.9)';            // navy edge: readable on sky AND water
+      ctx.strokeText(pop.text, pop.x, pop.y);
+      ctx.fillStyle = pop.color;
+      ctx.fillText(pop.text, pop.x, pop.y);
+    });
+    ctx.globalAlpha = 1;
+    ctx.textAlign = 'left';
+  }
+
+  // A soft red glow around the edges for a moment after a bump. Gentle on
+  // purpose: enough to say "ouch", not enough to startle a little kid.
+  function drawHurtFlash() {
+    const since = HURT_TIME - hurtLeft;
+    if (hurtLeft <= 0 || since > HURT_FLASH) return;
+    const strength = (1 - since / HURT_FLASH) * 0.35;
+    const glow = ctx.createRadialGradient(viewW / 2, viewH / 2, viewH * 0.35,
+                                          viewW / 2, viewH / 2, viewW * 0.62);
+    glow.addColorStop(0, 'rgba(255, 60, 90, 0)');
+    glow.addColorStop(1, `rgba(255, 60, 90, ${strength})`);
+    ctx.fillStyle = glow;
+    ctx.fillRect(0, 0, viewW, viewH);
+  }
+
   // The pause button: two white bars on a soft dark circle, so it reads
   // against both the pale sky and the water.
   function drawPauseButton() {
@@ -1810,8 +1961,26 @@
   }
 
   function drawPauseMenu() {
-    ctx.fillStyle = 'rgba(0, 0, 0, 0.6)';
+    // Resume was pressed: show "3, 2, 1" over the (still frozen) ocean.
+    if (resumeCountdown > 0) {
+      ctx.fillStyle = 'rgba(0, 0, 0, 0.25)';
+      ctx.fillRect(0, 0, viewW, viewH);
+      const number = Math.ceil(resumeCountdown / RESUME_STEP);
+      const within = 1 - (resumeCountdown / RESUME_STEP - (number - 1));  // 0 -> 1 during each number
+      const size = viewH * 0.3 * (1.25 - 0.25 * Math.min(1, within * 4));  // each one lands with a pop
+      ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
+      ctx.font = `bold ${size}px Arial`;
+      ctx.lineJoin = 'round'; ctx.lineWidth = size * 0.12;
+      ctx.strokeStyle = 'white';
+      ctx.strokeText(number, viewW / 2, viewH / 2);
+      ctx.fillStyle = '#FF69B4';
+      ctx.fillText(number, viewW / 2, viewH / 2);
+      ctx.textAlign = 'left'; ctx.textBaseline = 'alphabetic';
+      return;
+    }
+    ctx.fillStyle = `rgba(0, 0, 0, ${0.6 * screenFade()})`;
     ctx.fillRect(0, 0, viewW, viewH);
+    beginScreenPop();
     const pm = pauseMenuRects();
     ctx.textAlign = 'center';
     // The title is drawn only if it clears the score and hearts. On a phone
@@ -1830,6 +1999,7 @@
              'rgba(255,255,255,0.28)', 'white', btnFont);
     drawPill(pm.board, 'High scores', 'rgba(255,255,255,0.14)',
              'rgba(255,255,255,0.28)', 'white', btnFont);
+    ctx.restore();   // end of the pop-in started by beginScreenPop()
     ctx.textAlign = 'left';
   }
 
@@ -2014,7 +2184,11 @@
     // HERO (drawn before the water so the translucent water tints it when
     // the dolphin is submerged — that's what makes diving look right)
     if (gameState === 'PLAYING' || gameState === 'PAUSED') {
+      // Just bumped: she blinks for a moment, which also shows she's safe.
+      const blinking = hurtLeft > 0 && Math.floor(hurtLeft * 10) % 2 === 0;
+      if (blinking) ctx.globalAlpha = 0.35;
       drawHero(player.x, player.y, player.dy, player.y >= waterLine);
+      ctx.globalAlpha = 1;
     } else if (gameState === 'START') {
       // Deliberately NOT drawn on the how-to page: she bobs at the centre of
       // the screen, which is exactly where the icon legend sits.
@@ -2069,6 +2243,9 @@
           : Math.max(0, 1 + gap / 120);
         drawObstacle(obs.kind, Math.round(obs.x), Math.round(obs.y), warn);
       });
+
+      drawPickupEffects();
+      drawHurtFlash();
     }
 
     // --- UI RENDERING (RESPONSIVE) ---
@@ -2076,7 +2253,14 @@
       let hudFont = hudFontSize();
       ctx.fillStyle = 'black';
       ctx.font = `bold ${hudFont}px Arial`;
-      ctx.fillText('Money (Gems & Donuts): ' + score, hudX(), 40 + safeT + hudFont);
+      // A soft white outline behind the words. Treasures and clouds drift right
+      // through this corner, and plain black on top of them was hard to read.
+      ctx.lineJoin = 'round';
+      ctx.lineWidth = hudFont * 0.22;
+      ctx.strokeStyle = 'rgba(255, 255, 255, 0.8)';
+      const moneyLabel = 'Money (Gems & Donuts): ' + Math.round(scoreShown);
+      ctx.strokeText(moneyLabel, hudX(), 40 + safeT + hudFont);
+      ctx.fillText(moneyLabel, hudX(), 40 + safeT + hudFont);
       // Hearts, but a long row would run off a phone screen once the bonus
       // starts paying out, so past HEART_DISPLAY_MAX it becomes a count.
       const shown = Math.max(0, lives);
@@ -2085,6 +2269,7 @@
         : '❤️ x' + shown;
       const livesY = hudLivesY();
       const livesLabel = 'Lives: ' + heartText;
+      ctx.strokeText('Lives:', hudX(), livesY);   // outline the word only, not the heart emoji
       ctx.fillText(livesLabel, hudX(), livesY);
 
       // x2 badge, right after the hearts, pulsing so you notice you have it.
@@ -2173,8 +2358,9 @@
 
     // --- GAME OVER SCREEN (RESPONSIVE) ---
     if (gameState === 'GAMEOVER') {
-      ctx.fillStyle = 'rgba(0, 0, 0, 0.7)';
+      ctx.fillStyle = `rgba(0, 0, 0, ${0.7 * screenFade()})`;
       ctx.fillRect(0, 0, viewW, viewH);
+      beginScreenPop();   // finished well inside INPUT_GRACE, so taps always match what's drawn
 
       ctx.textAlign = 'center';
 
@@ -2249,6 +2435,7 @@
         ctx.fillText('(or press Enter)', viewW / 2, hintY);
       }
 
+      ctx.restore();   // end of the pop-in
       ctx.textAlign = 'left';
     }
 
@@ -2294,6 +2481,14 @@
     }
     if (gameState === 'PLAYING') spawn(dt);
     update(dt);
+
+    // How long the current screen has been up, for the pop-in.
+    if (gameState !== screenWas) { screenWas = gameState; screenAge = 0; }
+    else screenAge += dt;
+    if (resumeCountdown > 0) {
+      resumeCountdown -= dt;
+      if (resumeCountdown <= 0) finishResume();
+    }
     draw();
     requestAnimationFrame(loop);
   }

@@ -127,6 +127,29 @@ while dodging spiky shells. Endless.
   the first time it costs a life. The hero is deliberately NOT drawn behind this page — she
   bobs at screen centre, right where the icon legend sits.
 - Clouds, a scrolling sandy seafloor, and a responsive HUD that scales to the screen.
+- **Feedback layer** (the Nov 2026 polish pass — additive, none of it redraws Vivian's art
+  or changes a rule except the one noted):
+  - Pickups throw a ring of four-point stars and float a "+10" (`addPopup`, `addSparkles`,
+    `drawPickupEffects`). The number is the points ACTUALLY gained, so it doubles with the
+    x2 bonus. Pop-ups start above the pickup point, because a pickup always happens on top
+    of the kitten's head.
+  - A bump makes the hero blink with a soft pink edge glow (`drawHurtFlash`, deliberately
+    gentle), and **she can't be hit again for `HURT_TIME` (1.2s)**. That IS a rule change,
+    on the forgiving side: two hazards close together used to take two hearts at once.
+  - The HUD score rolls up (`scoreShown`) instead of jumping, and the HUD words have a soft
+    white outline so they read over treasures and clouds. Only the word "Lives:" is
+    outlined — stroking the heart emoji is unpredictable across devices.
+  - **Resume counts "3, 2, 1"** (`resumeCountdown`, ticked in `loop()`, drawn by
+    `drawPauseMenu()`). `gameState` stays `PAUSED` throughout; `finishResume()` flips it.
+    `pauseGame()` always cancels the countdown, so switching apps mid-count can't resume
+    the game behind your back. A press during the count is kept, so you can start swimming
+    the instant it ends.
+  - The game-over and pause panels pop in (`beginScreenPop()`, ended by a `ctx.restore()`
+    at the bottom of each panel). It finishes inside `INPUT_GRACE`, so on game over the
+    buttons are never tappable while still moving.
+  - **The donut's hole is real transparency** (`destination-out`), showing the page's sky
+    colour through the canvas. Any image exported with `canvas.toDataURL` has see-through
+    pixels there — flatten onto `#87CEEB` first (store screenshots must have no alpha).
 - **Landscape only** (Erik's call, Nov 2026: upright, a phone is too narrow to see what's
   coming). The native apps lock the orientation; the website can't, so when the screen is
   taller than wide it shows a "Turn your phone sideways" page (`isPortrait()`,
